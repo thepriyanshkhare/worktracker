@@ -1,0 +1,84 @@
+package com.septuary.app.data
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+
+@Dao
+interface MedicationDao {
+    @Query("SELECT * FROM medications WHERE active = 1")
+    suspend fun getAll(): List<MedicationEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(meds: List<MedicationEntity>)
+
+    @Query("SELECT COUNT(*) FROM medications")
+    suspend fun count(): Int
+}
+
+@Dao
+interface DoseLogDao {
+    @Query("SELECT * FROM dose_log WHERE date = :date")
+    suspend fun getForDate(date: String): List<DoseLogEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun mark(entry: DoseLogEntity)
+
+    @Query("DELETE FROM dose_log WHERE doseKey = :doseKey AND date = :date")
+    suspend fun unmark(doseKey: String, date: String)
+}
+
+@Dao
+interface WeightDao {
+    @Query("SELECT * FROM weight_log ORDER BY date DESC, time DESC LIMIT 30")
+    suspend fun recent(): List<WeightEntity>
+
+    @Insert
+    suspend fun insert(entry: WeightEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(entries: List<WeightEntity>)
+
+    @Query("SELECT COUNT(*) FROM weight_log")
+    suspend fun count(): Int
+}
+
+@Dao
+interface GlucoseDao {
+    @Query("SELECT * FROM glucose_log ORDER BY date DESC, time DESC LIMIT 30")
+    suspend fun recent(): List<GlucoseEntity>
+
+    @Insert
+    suspend fun insert(entry: GlucoseEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(entries: List<GlucoseEntity>)
+
+    @Query("SELECT COUNT(*) FROM glucose_log")
+    suspend fun count(): Int
+}
+
+@Dao
+interface GoalDao {
+    @Query("SELECT * FROM goals")
+    suspend fun getAll(): List<GoalEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(entries: List<GoalEntity>)
+
+    @Query("SELECT COUNT(*) FROM goals")
+    suspend fun count(): Int
+}
+
+@Dao
+interface FlagDao {
+    @Query("SELECT * FROM flags")
+    suspend fun getAll(): List<FlagEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(entries: List<FlagEntity>)
+
+    @Query("SELECT COUNT(*) FROM flags")
+    suspend fun count(): Int
+}
