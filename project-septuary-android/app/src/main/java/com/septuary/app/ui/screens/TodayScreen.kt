@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.septuary.app.data.Repository
+import com.septuary.app.ui.MotivationQuotes
 import com.septuary.app.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -37,8 +38,19 @@ fun TodayScreen(repo: Repository) {
     }
 
     LaunchedEffect(Unit) { reload() }
+    // Picked fresh each time this composable enters composition (i.e. each visit to the Today tab).
+    val quote = remember { MotivationQuotes.random() }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .background(Panel2, androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                .padding(12.dp)
+        ) {
+            Text(quote, color = TextMain, fontSize = 13.sp, lineHeight = 18.sp)
+        }
+        Spacer(Modifier.height(12.dp))
         Text(
             "${done.size} / ${doses.size} taken today",
             color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 10.dp)

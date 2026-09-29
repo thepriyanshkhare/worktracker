@@ -56,3 +56,13 @@ data class FlagEntity(
     val text: String,
     val resolved: Boolean
 )
+
+@Entity(tableName = "exercise_log")
+data class ExerciseLogEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val date: String,        // "YYYY-MM-DD"
+    val time: String,        // "HH:MM", 24h
+    val type: String,        // "Swimming" | "Cycling" | "Walking" | "Yoga"
+    val minutes: Int,
+    val note: String = ""
+)

@@ -82,3 +82,18 @@ interface FlagDao {
     @Query("SELECT COUNT(*) FROM flags")
     suspend fun count(): Int
 }
+
+@Dao
+interface ExerciseDao {
+    @Query("SELECT * FROM exercise_log WHERE date = :date ORDER BY time DESC")
+    suspend fun getForDate(date: String): List<ExerciseLogEntity>
+
+    @Query("SELECT * FROM exercise_log ORDER BY date DESC, time DESC LIMIT 60")
+    suspend fun recent(): List<ExerciseLogEntity>
+
+    @Insert
+    suspend fun insert(entry: ExerciseLogEntity)
+
+    @Query("DELETE FROM exercise_log WHERE id = :id")
+    suspend fun delete(id: Long)
+}

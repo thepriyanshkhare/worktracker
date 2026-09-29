@@ -88,5 +88,22 @@ class Repository(private val db: AppDatabase, private val appContext: Context) {
     suspend fun goals(): List<GoalEntity> = withContext(Dispatchers.IO) { db.goalDao().getAll() }
     suspend fun flags(): List<FlagEntity> = withContext(Dispatchers.IO) { db.flagDao().getAll() }
 
+    val exerciseTypes = listOf("Swimming", "Cycling", "Walking", "Yoga")
+
+    suspend fun addExercise(type: String, minutes: Int, note: String = "") = withContext(Dispatchers.IO) {
+        val now = Date()
+        db.exerciseDao().insert(
+            ExerciseLogEntity(
+                date = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(now),
+                time = SimpleDateFormat("HH:mm", Locale.US).format(now),
+                type = type, minutes = minutes, note = note
+            )
+        )
+    }
+
+    suspend fun todayExercise(): List<ExerciseLogEntity> = withContext(Dispatchers.IO) { db.exerciseDao().getForDate(todayKey()) }
+    suspend fun exerciseLog(): List<ExerciseLogEntity> = withContext(Dispatchers.IO) { db.exerciseDao().recent() }
+    suspend fun deleteExercise(id: Long) = withContext(Dispatchers.IO) { db.exerciseDao().delete(id) }
+
     fun close() = db.close()
 }
