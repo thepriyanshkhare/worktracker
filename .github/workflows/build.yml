@@ -31,7 +31,23 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build debug APK
-        run: gradle assembleDebug --no-daemon
+        run: |
+          set +e
+          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build_output.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "----- Extracted error lines -----"
+            grep -n -E "error:|FAILURE:|^e: |Exception|Caused by:" build_output.log | head -40 | tee build_errors.txt
+            # Emit as workflow error annotations so they're retrievable via the Checks API
+            # (the full raw log is stored on a blob host that's unreachable from the diagnosing
+            # session in this case; annotations go through the regular GitHub API instead).
+            while IFS= read -r line; do
+              safe=$(printf '%s' "$line" | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
+              echo "::error::${safe}"
+            done < build_errors.txt
+            exit 1
+          fi
+        shell: bash
 
       - name: Rename APK with run number
         run: cp app/build/outputs/apk/debug/app-debug.apk project-septuary-build-${{ github.run_number }}.apk
