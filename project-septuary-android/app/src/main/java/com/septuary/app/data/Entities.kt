@@ -13,7 +13,11 @@ data class MedicationEntity(
     val days: String,        // "daily" or "weekly:0".."weekly:6" (0=Sunday)
     val startDate: String?,  // "YYYY-MM-DD" or null
     val endDate: String?,    // "YYYY-MM-DD" or null
-    val active: Boolean = true
+    val active: Boolean = true,
+    // "medication" | "coffee" | "tea" | "meal" — same scheduling/alarm/dose-log machinery
+    // powers all four; category only decides which Today section and which Trends bucket
+    // (Medicine vs Food) an item counts toward.
+    val category: String = "medication"
 )
 
 @Entity(tableName = "dose_log", primaryKeys = ["doseKey", "date"])
@@ -64,5 +68,16 @@ data class ExerciseLogEntity(
     val time: String,        // "HH:MM", 24h
     val type: String,        // "Swimming" | "Cycling" | "Walking" | "Yoga"
     val minutes: Int,
+    val note: String = ""
+)
+
+@Entity(tableName = "sleep_log")
+data class SleepEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val date: String,        // "YYYY-MM-DD" of the morning this entry is logged for
+    val bedTime: String,     // "HH:MM", 24h
+    val wakeTime: String,    // "HH:MM", 24h
+    val hours: Double,       // derived from bedTime/wakeTime at log time, stored for cheap querying
+    val quality: Int,        // 1..5 (Poor..Excellent)
     val note: String = ""
 )

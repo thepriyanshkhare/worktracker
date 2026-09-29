@@ -30,7 +30,55 @@ object SeedData {
         MedicationEntity("icos", "Cap ICOS 1g", "Omega-3",
             "After dinner — 1-month course only, stop ~29 Oct 2026", "21:00", "daily", null, "2026-10-29"),
         MedicationEntity("foracort-pm", "Foracort Inhaler", "Formoterol + Budesonide — 2 puffs",
-            "Night — rinse mouth after use", "21:30", "daily", null, null)
+            "Night — rinse mouth after use", "21:30", "daily", null, null),
+
+        // Wellness reminders — same alarm/dose-log machinery as medications, grouped separately
+        // on Today and counted toward the "Food" (not "Medicine") Trends bucket.
+        MedicationEntity(
+            id = "coffee-1", name = "Black Coffee", detail = "1 of 3 — no sugar/cream",
+            instruction = "Skip if you're already feeling wired or it's this late", time = "08:15",
+            days = "daily", startDate = null, endDate = null, category = "coffee"
+        ),
+        MedicationEntity(
+            id = "coffee-2", name = "Black Coffee", detail = "2 of 3 — no sugar/cream",
+            instruction = "Skip if you're already feeling wired or it's this late", time = "12:30",
+            days = "daily", startDate = null, endDate = null, category = "coffee"
+        ),
+        MedicationEntity(
+            id = "coffee-3", name = "Black Coffee", detail = "3 of 3 — no sugar/cream",
+            instruction = "Last one for the day — keep it away from bedtime", time = "16:30",
+            days = "daily", startDate = null, endDate = null, category = "coffee"
+        ),
+        MedicationEntity(
+            id = "greentea-1", name = "Green Tea", detail = "1 of 3",
+            instruction = "Between meals, not right on top of coffee", time = "10:00",
+            days = "daily", startDate = null, endDate = null, category = "tea"
+        ),
+        MedicationEntity(
+            id = "greentea-2", name = "Green Tea", detail = "2 of 3",
+            instruction = "Between meals, not right on top of coffee", time = "15:00",
+            days = "daily", startDate = null, endDate = null, category = "tea"
+        ),
+        MedicationEntity(
+            id = "greentea-3", name = "Green Tea", detail = "3 of 3",
+            instruction = "Keep it away from bedtime", time = "18:30",
+            days = "daily", startDate = null, endDate = null, category = "tea"
+        ),
+        MedicationEntity(
+            id = "meal-breakfast", name = "Breakfast", detail = "On-time meal reminder",
+            instruction = "Eat before the 08:15/08:30 medication doses", time = "08:00",
+            days = "daily", startDate = null, endDate = null, category = "meal"
+        ),
+        MedicationEntity(
+            id = "meal-lunch", name = "Lunch", detail = "On-time meal reminder",
+            instruction = "Eat before the 13:30 after-lunch doses", time = "13:00",
+            days = "daily", startDate = null, endDate = null, category = "meal"
+        ),
+        MedicationEntity(
+            id = "meal-dinner", name = "Dinner", detail = "On-time meal reminder",
+            instruction = "Eat before the 21:00 after-dinner doses", time = "20:30",
+            days = "daily", startDate = null, endDate = null, category = "meal"
+        )
     )
 
     val weightLog = listOf(

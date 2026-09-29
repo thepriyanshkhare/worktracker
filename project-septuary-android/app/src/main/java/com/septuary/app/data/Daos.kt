@@ -22,6 +22,9 @@ interface DoseLogDao {
     @Query("SELECT * FROM dose_log WHERE date = :date")
     suspend fun getForDate(date: String): List<DoseLogEntity>
 
+    @Query("SELECT * FROM dose_log WHERE date >= :from")
+    suspend fun since(from: String): List<DoseLogEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun mark(entry: DoseLogEntity)
 
@@ -84,12 +87,33 @@ interface FlagDao {
 }
 
 @Dao
+interface SleepDao {
+    @Query("SELECT * FROM sleep_log ORDER BY date DESC LIMIT 30")
+    suspend fun recent(): List<SleepEntity>
+
+    @Query("SELECT * FROM sleep_log WHERE date >= :from")
+    suspend fun since(from: String): List<SleepEntity>
+
+    @Query("SELECT * FROM sleep_log WHERE date = :date LIMIT 1")
+    suspend fun getForDate(date: String): SleepEntity?
+
+    @Insert
+    suspend fun insert(entry: SleepEntity)
+
+    @Query("SELECT COUNT(*) FROM sleep_log")
+    suspend fun count(): Int
+}
+
+@Dao
 interface ExerciseDao {
     @Query("SELECT * FROM exercise_log WHERE date = :date ORDER BY time DESC")
     suspend fun getForDate(date: String): List<ExerciseLogEntity>
 
     @Query("SELECT * FROM exercise_log ORDER BY date DESC, time DESC LIMIT 60")
     suspend fun recent(): List<ExerciseLogEntity>
+
+    @Query("SELECT * FROM exercise_log WHERE date >= :from")
+    suspend fun since(from: String): List<ExerciseLogEntity>
 
     @Insert
     suspend fun insert(entry: ExerciseLogEntity)

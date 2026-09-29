@@ -17,9 +17,10 @@ import net.sqlcipher.database.SupportFactory
         GlucoseEntity::class,
         GoalEntity::class,
         FlagEntity::class,
-        ExerciseLogEntity::class
+        ExerciseLogEntity::class,
+        SleepEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -30,6 +31,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun goalDao(): GoalDao
     abstract fun flagDao(): FlagDao
     abstract fun exerciseDao(): ExerciseDao
+    abstract fun sleepDao(): SleepDao
 
     companion object {
         /** Adds the exercise_log table. Existing meds/weight/glucose/goals/flags data is untouched. */
@@ -50,6 +52,28 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds a `category` column to medications (groups Today into Medications/Meals/Coffee/Tea,
+         *  and Trends into Medicine/Food) and the sleep_log table. Existing medication rows default
+         *  to category='medication', so nothing already scheduled changes group. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE medications ADD COLUMN category TEXT NOT NULL DEFAULT 'medication'")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sleep_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        date TEXT NOT NULL,
+                        bedTime TEXT NOT NULL,
+                        wakeTime TEXT NOT NULL,
+                        hours REAL NOT NULL,
+                        quality INTEGER NOT NULL,
+                        note TEXT NOT NULL DEFAULT ''
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         /**
          * Opens (or creates) the encrypted database using [passphrase] as the SQLCipher key.
          * A wrong passphrase throws when the DB is first touched — that's how PIN verification
@@ -60,7 +84,7 @@ abstract class AppDatabase : RoomDatabase() {
             val factory = SupportFactory(SQLiteDatabase.getBytes(passphrase))
             return Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "septuary_encrypted.db")
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
         }
     }

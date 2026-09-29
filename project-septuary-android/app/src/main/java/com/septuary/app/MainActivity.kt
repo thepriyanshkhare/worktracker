@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -77,7 +78,7 @@ fun App() {
     }
 }
 
-private enum class Tab(val label: String) { TODAY("Today"), EXERCISE("Exercise"), LOG("Log"), GOALS("Goals"), SETTINGS("Settings") }
+private enum class Tab(val label: String) { TODAY("Today"), EXERCISE("Exercise"), TRENDS("Trends"), LOG("Log"), GOALS("Goals"), SETTINGS("Settings") }
 
 @Composable
 fun MainScaffold(repo: Repository, onLock: () -> Unit) {
@@ -93,6 +94,7 @@ fun MainScaffold(repo: Repository, onLock: () -> Unit) {
             when (tab) {
                 Tab.TODAY -> TodayScreen(repo)
                 Tab.EXERCISE -> ExerciseScreen(repo)
+                Tab.TRENDS -> TrendsScreen(repo)
                 Tab.LOG -> LogScreen(repo)
                 Tab.GOALS -> GoalsScreen(repo)
                 Tab.SETTINGS -> SettingsScreen(onLock = onLock)
@@ -110,6 +112,12 @@ fun MainScaffold(repo: Repository, onLock: () -> Unit) {
                 selected = tab == Tab.EXERCISE, onClick = { tab = Tab.EXERCISE },
                 icon = { Icon(Icons.Filled.FitnessCenter, contentDescription = null) },
                 label = { Text("Exercise") },
+                colors = navColors()
+            )
+            NavigationBarItem(
+                selected = tab == Tab.TRENDS, onClick = { tab = Tab.TRENDS },
+                icon = { Icon(Icons.Filled.TrendingUp, contentDescription = null) },
+                label = { Text("Trends") },
                 colors = navColors()
             )
             NavigationBarItem(
