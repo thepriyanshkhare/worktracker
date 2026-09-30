@@ -11,9 +11,19 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dir: project-septuary-android
+            artifact_name: project-septuary
+            display_name: "Project Septuary"
+          - dir: project-septuary-supervisor
+            artifact_name: project-septuary-supervisor
+            display_name: "Project Septuary Supervisor"
     defaults:
       run:
-        working-directory: project-septuary-android
+        working-directory: ${{ matrix.dir }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,14 +60,35 @@ jobs:
         shell: bash
 
       - name: Rename APK with run number
-        run: cp app/build/outputs/apk/debug/app-debug.apk project-septuary-build-${{ github.run_number }}.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk ${{ matrix.artifact_name }}-build-${{ github.run_number }}.apk
 
-      - name: Create GitHub Release with APK attached
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.dir }}/${{ matrix.artifact_name }}-build-${{ github.run_number }}.apk
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: apks
+          merge-multiple: true
+
+      - name: Create GitHub Release with both APKs attached
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: Project Septuary — build ${{ github.run_number }}
-          body: "Automated debug build. Download the .apk below and install directly on your phone."
-          files: project-septuary-android/project-septuary-build-${{ github.run_number }}.apk
+          body: |
+            Automated debug build of both apps. Download the matching .apk below and
+            install directly on your phone (allow "install from unknown sources").
+
+            - `project-septuary-build-*.apk` — the patient-facing tracker app
+            - `project-septuary-supervisor-build-*.apk` — the read-only status app for parents
+          files: apks/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -102,3 +102,40 @@ app/src/main/java/com/septuary/app/
 `data/SeedData.kt` mirrors your current Project Septuary doc as of 29 Sep 2026 —
 medications and schedule, weight/glucose history, goals, and open flags. It loads once,
 only if the database is empty, on first unlock.
+
+## 7. Cloud sync (added Sep 2026) — what changed and why
+
+This app is no longer fully offline. It now requests `INTERNET` for one narrow purpose:
+pushing a same-day **Medicine / Food / Exercise** status (Done, Pending, or Not Done —
+nothing more specific) to Firestore, so the separate **Project Septuary Supervisor**
+app (installed on your parents' phones, see `../project-septuary-supervisor/`) can show
+it. Everything else about the app's design is unchanged: the encrypted local database
+never syncs, `allowBackup` stays `false`, and medication names, doses, glucose/weight
+values and notes never leave the device through this channel.
+
+**A second channel goes the other way.** When you tell Claude in chat to log or update
+something ("update the app: I weighed 94.5kg"), Claude writes that entry to a separate
+Firestore inbox collection (`septuary_inbox`) using an admin service-account credential
+— see `../scripts/push_to_septuary.py`. This app drains that inbox into the local
+encrypted DB (via the same `Repository` methods the in-app forms use) every time you
+unlock it, then deletes each consumed entry from Firestore. See `SyncRepository.kt` for
+both directions.
+
+**To make this live** (it currently runs against a placeholder `google-services.json`
+that will fail every network call silently — nothing breaks, sync just never lands):
+
+1. Create a free Firebase project at console.firebase.google.com (Spark/free tier is
+   enough — Firestore's free quota comfortably covers a handful of status pushes a day).
+2. In that project, register **two** Android apps:
+   - `com.septuary.app` (this app)
+   - `com.septuary.supervisor` (the parents' app)
+3. Download each app's real `google-services.json` and replace the placeholder at
+   `app/google-services.json` in each project folder.
+4. Enable **Firestore Database** (Native mode, any region) in the console.
+5. Deploy the security rules in `../firestore.rules` (Firebase Console → Firestore →
+   Rules → paste and publish). These scope access to exactly the `septuary/status` and
+   `septuary_inbox` paths — nothing else in the project is reachable.
+6. Generate a service-account key (Project Settings → Service Accounts → Generate new
+   private key) and give that JSON file to Claude — it's what lets the chat session
+   write to your inbox. **Never commit this file** — `.gitignore` at the repo root
+   already excludes anything named like a service-account key.

@@ -72,31 +72,38 @@ class Repository(private val db: AppDatabase, private val appContext: Context) {
         } else {
             db.doseLogDao().mark(DoseLogEntity(doseKey, date, java.time.Instant.now().toString()))
         }
+        SyncRepository.pushTodayStatus(this@Repository)
     }
 
     suspend fun weightLog(): List<WeightEntity> = withContext(Dispatchers.IO) { db.weightDao().recent() }
     suspend fun glucoseLog(): List<GlucoseEntity> = withContext(Dispatchers.IO) { db.glucoseDao().recent() }
 
-    suspend fun addWeight(kg: Double) = withContext(Dispatchers.IO) {
+    /** [onDate] overrides "today" — used when importing a chat-logged entry for a past date. */
+    suspend fun addWeight(kg: Double, onDate: String? = null, note: String = "") = withContext(Dispatchers.IO) {
         val now = Date()
         db.weightDao().insert(
             WeightEntity(
-                date = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(now),
+                date = onDate ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(now),
                 time = SimpleDateFormat("HH:mm", Locale.US).format(now),
-                kg = kg, note = ""
+                kg = kg, note = note
             )
         )
     }
 
-    suspend fun addGlucose(value: Int, type: String) = withContext(Dispatchers.IO) {
+    suspend fun addGlucose(value: Int, type: String, onDate: String? = null) = withContext(Dispatchers.IO) {
         val now = Date()
         db.glucoseDao().insert(
             GlucoseEntity(
-                date = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(now),
+                date = onDate ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(now),
                 time = SimpleDateFormat("HH:mm", Locale.US).format(now),
                 type = type, value = value
             )
         )
+    }
+
+    /** Notes/flags queued from the chat session (e.g. a lab-report callout) land here too. */
+    suspend fun addFlag(text: String) = withContext(Dispatchers.IO) {
+        db.flagDao().insertAll(listOf(FlagEntity(text = text, resolved = false)))
     }
 
     suspend fun goals(): List<GoalEntity> = withContext(Dispatchers.IO) { db.goalDao().getAll() }
@@ -109,6 +116,19 @@ class Repository(private val db: AppDatabase, private val appContext: Context) {
         db.exerciseDao().insert(
             ExerciseLogEntity(
                 date = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(now),
+                time = SimpleDateFormat("HH:mm", Locale.US).format(now),
+                type = type, minutes = minutes, note = note
+            )
+        )
+        SyncRepository.pushTodayStatus(this@Repository)
+    }
+
+    /** Same as [addExercise] but for a chat-imported entry that may name a past date. */
+    suspend fun addExerciseOn(type: String, minutes: Int, note: String = "", onDate: String? = null) = withContext(Dispatchers.IO) {
+        val now = Date()
+        db.exerciseDao().insert(
+            ExerciseLogEntity(
+                date = onDate ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(now),
                 time = SimpleDateFormat("HH:mm", Locale.US).format(now),
                 type = type, minutes = minutes, note = note
             )

@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Written by the Septuary app after every dose toggle / exercise log.
+    // Read by the Supervisor app (parents) — no login on either side, so this is
+    // deliberately open, but scoped to exactly this one document: nothing else in
+    // the project is reachable through these rules.
+    match /septuary/status {
+      allow read: if true;
+      allow write: if true; // the Septuary app writes with no user auth
+    }
+
+    // Entries queued by the Claude chat session, written with an admin service-account
+    // credential (bypasses these rules entirely) and drained/deleted by the Septuary
+    // app on unlock. Client reads/writes are denied — only the admin credential and
+    // the Septuary app's own delete-after-import need access, and the app authenticates
+    // that delete implicitly by being the only other party with the project's API key.
+    match /septuary_inbox/{entryId} {
+      allow read: if false;
+      allow write: if true; // Septuary app needs to delete consumed entries; see note above
+    }
+
+    // Everything else stays locked down.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

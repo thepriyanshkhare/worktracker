@@ -64,6 +64,13 @@ fun App() {
                         newRepo.seedIfEmpty()
                         repo = newRepo
                         isFirstRun = false
+                        // Drain anything logged from the Claude chat, then push current status —
+                        // both run on unlock so parents see today's real state even before
+                        // anything's been toggled in the app itself.
+                        launch {
+                            com.septuary.app.data.SyncRepository.importInbox(newRepo)
+                            com.septuary.app.data.SyncRepository.pushTodayStatus(newRepo)
+                        }
                     } catch (e: Exception) {
                         errorMessage = if (isSetup) "Something went wrong setting up. Try again." else "Wrong PIN. Try again."
                     }
@@ -87,7 +94,7 @@ fun MainScaffold(repo: Repository, onLock: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.padding(top = 18.dp, start = 16.dp, end = 16.dp, bottom = 10.dp)) {
             Text("Project Septuary", color = TextMain, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-            Text("Private · offline · on-device", color = TextMuted, fontSize = 12.sp)
+            Text("Private · on-device · status shared with family", color = TextMuted, fontSize = 12.sp)
         }
 
         Box(Modifier.weight(1f)) {

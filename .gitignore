@@ -1,0 +1,11 @@
+# Firebase service-account keys — never commit these. Grants admin access to Firestore.
+*service-account*.json
+*serviceaccount*.json
+firebase-adminsdk*.json
+
+# Standard Android/Gradle build output
+**/build/
+**/.gradle/
+*.iml
+.idea/
+local.properties

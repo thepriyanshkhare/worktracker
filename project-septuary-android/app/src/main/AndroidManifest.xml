@@ -7,9 +7,13 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- Deliberately NOT requesting android.permission.INTERNET anywhere in this manifest.
-         Without it, the OS itself blocks all network access at the app-sandbox level —
-         this app is offline by construction, not just by choice of code. -->
+    <!-- INTERNET was added deliberately (Sep 2026) for one narrow purpose: pushing a
+         same-day Done/Pending/Not-Done status per section (Medicine, Food, Exercise) to
+         Firestore so the separate supervisor app (for parents) can show it. That push is
+         the ONLY network traffic this app ever makes — no medication names, doses,
+         glucose/weight values, or notes ever leave the device. See SyncRepository.kt.
+         The encrypted health database itself remains fully local; allowBackup stays false. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="false"

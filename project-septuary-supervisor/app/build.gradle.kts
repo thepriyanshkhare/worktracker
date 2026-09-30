@@ -2,16 +2,15 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("com.google.devtools.ksp")
     id("com.google.gms.google-services")
 }
 
 android {
-    namespace = "com.septuary.app"
+    namespace = "com.septuary.supervisor"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.septuary.app"
+        applicationId = "com.septuary.supervisor"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
@@ -25,8 +24,6 @@ android {
         }
     }
 
-    // No auto-backup of app data — the encrypted DB should never leave this device,
-    // not even via Google's Auto Backup to Drive. See AndroidManifest (allowBackup=false).
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -57,18 +54,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Encrypted local database: Room (schema/queries) over SQLCipher (encryption at rest).
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
-    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
-    implementation("androidx.sqlite:sqlite:2.4.0")
-
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
-
-    // Cloud sync: pushes only a same-day Done/Pending/Not-Done status per section
-    // (Medicine, Food, Exercise) to Firestore for the parents' supervisor app to read.
-    // Never syncs medication names, doses, glucose/weight values, or notes — see SyncRepository.kt.
+    // Read-only: this app only ever listens to Firestore, never writes.
     implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
     implementation("com.google.firebase:firebase-firestore-ktx")
 
