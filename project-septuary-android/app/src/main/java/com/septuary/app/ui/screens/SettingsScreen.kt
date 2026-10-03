@@ -19,17 +19,42 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.health.connect.client.PermissionController
+import com.septuary.app.data.HealthConnectRepository
+import com.septuary.app.data.Repository
 import com.septuary.app.ui.theme.*
+import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(onLock: () -> Unit) {
+fun SettingsScreen(repo: Repository, onLock: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var notifGranted by remember { mutableStateOf(hasNotifPermission(context)) }
     var exactAlarmGranted by remember { mutableStateOf(hasExactAlarmPermission(context)) }
+    val hcAvailable = remember { HealthConnectRepository.isAvailable(context) }
+    var hcGranted by remember { mutableStateOf(false) }
+    var hcSyncing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (hcAvailable) hcGranted = HealthConnectRepository.hasAllPermissions(context)
+    }
 
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         notifGranted = granted
+    }
+
+    val hcPermissionLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) { granted ->
+        hcGranted = granted.containsAll(HealthConnectRepository.requiredPermissions())
+        if (hcGranted) {
+            scope.launch {
+                hcSyncing = true
+                HealthConnectRepository.sync(context, repo)
+                hcSyncing = false
+            }
+        }
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
@@ -75,12 +100,39 @@ fun SettingsScreen(onLock: () -> Unit) {
 
         Spacer(Modifier.height(12.dp))
 
+        Card(title = "Health Connect") {
+            val statusText = when {
+                !hcAvailable -> "Not available on this device"
+                hcSyncing -> "Syncing…"
+                hcGranted -> "Connected — Weight & Steps auto-fill on unlock"
+                else -> "Permission needed"
+            }
+            Text(statusText, color = if (hcGranted) Accent else TextMuted, fontSize = 13.sp)
+            Spacer(Modifier.height(10.dp))
+            if (hcAvailable && !hcGranted) {
+                Button(onClick = { hcPermissionLauncher.launch(HealthConnectRepository.requiredPermissions()) }) {
+                    Text("Connect Health Connect")
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+            Text(
+                "Reads only Weight and Steps — never sleep or heart rate. A day you log weight for " +
+                    "yourself always wins; Health Connect only fills in days you haven't logged.",
+                color = TextMuted, fontSize = 12.sp
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
         Card(title = "Privacy") {
             Text(
-                "This app requests no INTERNET permission — the OS itself blocks all network access at the " +
-                    "sandbox level, not just the code choosing not to make calls. All data lives in an encrypted " +
-                    "SQLCipher database, keyed by your PIN (PBKDF2, 150,000 rounds). Auto-backup to Google Drive is " +
-                    "disabled (allowBackup=false) so an OS-level backup can't copy your data off this device either.",
+                "All data lives in an encrypted SQLCipher database, keyed by your PIN (PBKDF2, 150,000 rounds). " +
+                    "Auto-backup to Google Drive is disabled (allowBackup=false) so an OS-level backup can't copy " +
+                    "your data off this device either. INTERNET permission is granted, but used for exactly one " +
+                    "thing: a small, authenticated sync to Firestore so your parents' Supervisor app can see a " +
+                    "status summary (and, as of Oct 2026, actual medicine/food names, exercise, and recent weight " +
+                    "— a deliberate choice you made). Glucose and free-text notes are never synced. See " +
+                    "SyncRepository.kt for exactly what leaves this device and firestore.rules for who can read it.",
                 color = TextMuted, fontSize = 12.sp
             )
             Spacer(Modifier.height(8.dp))

@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "000000000000",
-    "project_id": "PLACEHOLDER-REPLACE-ME",
-    "storage_bucket": "PLACEHOLDER-REPLACE-ME.appspot.com"
+    "project_number": "701016054658",
+    "project_id": "project-septuary",
+    "storage_bucket": "project-septuary.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "mobilesdk_app_id": "1:701016054658:android:64df29cca45b5e5dc00d9b",
         "android_client_info": {
           "package_name": "com.septuary.app"
         }
@@ -15,7 +15,26 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "PLACEHOLDER-REPLACE-ME"
+          "current_key": "AIzaSyBUQs82rb_R-o5NTCu93drbP-wlMYaIaKM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:701016054658:android:747f3178c8de4c4ec00d9b",
+        "android_client_info": {
+          "package_name": "com.septuary.supervisor"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBUQs82rb_R-o5NTCu93drbP-wlMYaIaKM"
         }
       ],
       "services": {

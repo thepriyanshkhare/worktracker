@@ -48,7 +48,8 @@ fun TrendsScreen(repo: Repository) {
         Text(
             "100 = best possible outcome that day. Medicine & Food are adherence to what was " +
                 "scheduled; Exercise is minutes vs. a ${Trends.EXERCISE_DAILY_TARGET_MIN}min/day target; " +
-                "Sleep blends hours-vs-target with how you rated it.",
+                "Sleep blends hours-vs-target with how you rated it. Weight and Glucose are shown " +
+                "alongside, not folded into Overall.",
             color = TextMuted, fontSize = 12.sp
         )
         Spacer(Modifier.height(12.dp))
@@ -76,9 +77,13 @@ fun TrendsScreen(repo: Repository) {
 @Composable
 private fun DailyTrends(repo: Repository, data: Trends.RawData) {
     val today = repo.todayKey()
-    val score = remember(data) {
-        Trends.computeDailyScores(listOf(today), data, repo::isMedActiveOnDate).first()
+    val yesterday = remember { repo.dateDaysAgo(1) }
+    val scores = remember(data) {
+        Trends.computeDailyScores(listOf(yesterday, today), data, repo::isMedActiveOnDate)
     }
+    val score = scores.last()
+    val yesterdayWeight = scores.first().weight
+
     Card(title = "Today") {
         CategoryBigBar("Medicine", score.medicine)
         Spacer(Modifier.height(10.dp))
@@ -87,11 +92,49 @@ private fun DailyTrends(repo: Repository, data: Trends.RawData) {
         CategoryBigBar("Exercise", score.exercise)
         Spacer(Modifier.height(10.dp))
         CategoryBigBar("Sleep", score.sleep)
+        Spacer(Modifier.height(10.dp))
+        WeightRow(score.weight, yesterdayWeight)
+        Spacer(Modifier.height(10.dp))
+        StepsRow(score.steps)
+        Spacer(Modifier.height(10.dp))
+        CategoryBigBar("Glucose", score.glucoseInRange)
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("OVERALL", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             Text("${score.overall}%", color = bandColor(score.overall), fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
+    }
+}
+
+/** Weight has no inherent 0-100 "good" score, so it's a plain number with a ▲/▼ vs. yesterday,
+ *  rather than forced through [CategoryBigBar]'s band-color math. */
+@Composable
+private fun WeightRow(todayKg: Double?, yesterdayKg: Double?) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text("Weight", color = TextMain, fontSize = 13.sp)
+        val text = when {
+            todayKg == null -> "—"
+            yesterdayKg == null -> "%.1f kg".format(todayKg)
+            else -> {
+                val delta = todayKg - yesterdayKg
+                val arrow = if (delta > 0) "▲" else if (delta < 0) "▼" else "–"
+                "%.1f kg %s %.1f".format(todayKg, arrow, kotlin.math.abs(delta))
+            }
+        }
+        Text(text, color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** Steps has no inherent 0-100 "good" score either (no personal goal set), so it's a plain
+ *  count, same treatment as [WeightRow]. */
+@Composable
+private fun StepsRow(count: Int?) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text("Steps", color = TextMain, fontSize = 13.sp)
+        Text(
+            if (count == null) "—" else "%,d steps".format(count),
+            color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
@@ -134,11 +177,49 @@ private fun WeeklyTrends(repo: Repository, data: Trends.RawData) {
         Spacer(Modifier.height(16.dp))
         CategoryWeekRow("Sleep", labels, scores.map { it.sleep }, Trends.average(scores) { it.sleep })
         Spacer(Modifier.height(16.dp))
+        CategoryWeekRow("Glucose", labels, scores.map { it.glucoseInRange }, Trends.average(scores) { it.glucoseInRange })
+        Spacer(Modifier.height(16.dp))
+        WeightDeltaRow(scores)
+        Spacer(Modifier.height(16.dp))
+        StepsAverageRow(scores)
+        Spacer(Modifier.height(16.dp))
         val overallAvg = if (scores.isEmpty()) 0 else scores.sumOf { it.overall } / scores.size
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("WEEKLY OVERALL", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             Text("$overallAvg%", color = bandColor(overallAvg), fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
+    }
+}
+
+/** Average daily steps over the period — same "no 0-100 score" treatment as weight, so it's a
+ *  plain number rather than forced through [CategoryWeekRow]'s band-colored bar chart. */
+@Composable
+private fun StepsAverageRow(scores: List<Trends.DayScore>) {
+    val avg = Trends.average(scores) { it.steps }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text("Steps", color = TextMain, fontSize = 13.sp)
+        Text(
+            if (avg == null) "—" else "%,d avg/day".format(avg),
+            color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+/** Weight across a period as plain "start → end, Δ" text — no min/max-scaled chart, since a
+ *  single numeric trend is enough for a self-tracking view at this scope (no CSV/PDF export). */
+@Composable
+private fun WeightDeltaRow(scores: List<Trends.DayScore>) {
+    val readings = scores.mapNotNull { it.weight }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text("Weight", color = TextMain, fontSize = 13.sp)
+        val text = if (readings.isEmpty()) "—" else {
+            val start = readings.first()
+            val end = readings.last()
+            val delta = end - start
+            val arrow = if (delta > 0) "▲" else if (delta < 0) "▼" else "–"
+            "%.1f → %.1f kg (%s %.1f)".format(start, end, arrow, kotlin.math.abs(delta))
+        }
+        Text(text, color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -174,6 +255,16 @@ private fun MonthlyTrends(repo: Repository, data: Trends.RawData) {
             buckets.map { b -> Trends.average(b) { it.sleep } },
             Trends.average(scores) { it.sleep }
         )
+        Spacer(Modifier.height(16.dp))
+        CategoryWeekRow(
+            "Glucose", bucketLabels,
+            buckets.map { b -> Trends.average(b) { it.glucoseInRange } },
+            Trends.average(scores) { it.glucoseInRange }
+        )
+        Spacer(Modifier.height(16.dp))
+        WeightDeltaRow(scores)
+        Spacer(Modifier.height(16.dp))
+        StepsAverageRow(scores)
         Spacer(Modifier.height(16.dp))
         val overallAvg = if (scores.isEmpty()) 0 else scores.sumOf { it.overall } / scores.size
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

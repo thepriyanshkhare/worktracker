@@ -9,3 +9,7 @@ firebase-adminsdk*.json
 *.iml
 .idea/
 local.properties
+
+# Python bytecode cache
+__pycache__/
+*.pyc

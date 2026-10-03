@@ -30,12 +30,18 @@ interface DoseLogDao {
 
     @Query("DELETE FROM dose_log WHERE doseKey = :doseKey AND date = :date")
     suspend fun unmark(doseKey: String, date: String)
+
+    @Query("UPDATE dose_log SET photoPath = :photoPath WHERE doseKey = :doseKey AND date = :date")
+    suspend fun setPhoto(doseKey: String, date: String, photoPath: String?)
 }
 
 @Dao
 interface WeightDao {
     @Query("SELECT * FROM weight_log ORDER BY date DESC, time DESC LIMIT 30")
     suspend fun recent(): List<WeightEntity>
+
+    @Query("SELECT * FROM weight_log WHERE date >= :from ORDER BY date ASC, time ASC")
+    suspend fun since(from: String): List<WeightEntity>
 
     @Insert
     suspend fun insert(entry: WeightEntity)
@@ -45,12 +51,32 @@ interface WeightDao {
 
     @Query("SELECT COUNT(*) FROM weight_log")
     suspend fun count(): Int
+
+    @Query("SELECT EXISTS(SELECT 1 FROM weight_log WHERE date = :date)")
+    suspend fun existsForDate(date: String): Boolean
+}
+
+@Dao
+interface StepsDao {
+    @Query("SELECT * FROM steps_log WHERE date >= :from ORDER BY date ASC")
+    suspend fun since(from: String): List<StepsEntity>
+
+    // REPLACE on the `date` primary key gives upsert-by-day for free — today's running count
+    // is re-synced throughout the day and should update in place, never duplicate.
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: StepsEntity)
+
+    @Query("SELECT COUNT(*) FROM steps_log")
+    suspend fun count(): Int
 }
 
 @Dao
 interface GlucoseDao {
     @Query("SELECT * FROM glucose_log ORDER BY date DESC, time DESC LIMIT 30")
     suspend fun recent(): List<GlucoseEntity>
+
+    @Query("SELECT * FROM glucose_log WHERE date >= :from ORDER BY date ASC, time ASC")
+    suspend fun since(from: String): List<GlucoseEntity>
 
     @Insert
     suspend fun insert(entry: GlucoseEntity)

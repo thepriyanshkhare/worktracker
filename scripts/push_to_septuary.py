@@ -4,10 +4,11 @@ Pushes one log entry into the Septuary app's Firestore inbox — this is how the
 chat session ("update the app with X") gets something into Priyansh's phone without
 ever touching his local encrypted database directly.
 
-Flow: this script writes a document to the `septuary_inbox` collection using an admin
-service-account credential (bypasses Firestore security rules entirely, by design —
-see /firestore.rules). The Septuary app itself drains that collection into its local
-encrypted DB every time Priyansh unlocks it, then deletes each consumed document.
+Flow: this script writes a document to the inbox collection (see INBOX_COLLECTION below —
+an unguessable token-based name, not a plain word, as of the Oct 2026 security hardening)
+using an admin service-account credential, which bypasses Firestore security rules entirely
+by design (see /firestore.rules). The Septuary app itself drains that collection into its
+local encrypted DB every time Priyansh unlocks it, then deletes each consumed document.
 
 Requires:
     pip install --break-system-packages google-auth requests
@@ -42,7 +43,11 @@ except ImportError:
 import requests
 
 SCOPES = ["https://www.googleapis.com/auth/datastore"]
-INBOX_COLLECTION = "septuary_inbox"
+# Oct 2026 security hardening: must match SyncRepository.ROOT_COLLECTION in the Android app,
+# the Supervisor app's ROOT_COLLECTION, and firestore.rules exactly. Admin-credential calls
+# (this script) bypass security rules entirely, but the collection name still has to match
+# what the app actually drains on unlock.
+INBOX_COLLECTION = "septuary_86800832c1af658f9d30a04276952c81_inbox"
 
 
 def get_access_token(key_path: str) -> tuple[str, str]:

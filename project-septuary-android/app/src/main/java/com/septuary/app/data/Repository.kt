@@ -4,6 +4,7 @@ import android.content.Context
 import com.septuary.app.alarm.AlarmScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -72,23 +73,64 @@ class Repository(private val db: AppDatabase, private val appContext: Context) {
         } else {
             db.doseLogDao().mark(DoseLogEntity(doseKey, date, java.time.Instant.now().toString()))
         }
-        SyncRepository.pushTodayStatus(this@Repository)
+        SyncRepository.pushToday(this@Repository)
+    }
+
+    // --- Optional food photo (attached after a food/coffee/tea/meal dose is marked done) ---
+
+    /** Where a newly captured photo for [doseKey] should be written, under filesDir/dose_photos/. */
+    fun newDosePhotoFile(doseKey: String): File {
+        val dir = File(appContext.filesDir, "dose_photos").apply { mkdirs() }
+        val safeName = doseKey.replace(":", "-").replace("@", "_")
+        return File(dir, "${safeName}_${todayKey()}.jpg")
+    }
+
+    /** [photoPath] is relative to filesDir (e.g. "dose_photos/xxx.jpg"), as returned by [newDosePhotoFile]. */
+    suspend fun attachDosePhoto(doseKey: String, photoPath: String) = withContext(Dispatchers.IO) {
+        db.doseLogDao().setPhoto(doseKey, todayKey(), photoPath)
+    }
+
+    suspend fun dosePhotoPath(doseKey: String): String? = withContext(Dispatchers.IO) {
+        db.doseLogDao().getForDate(todayKey()).firstOrNull { it.doseKey == doseKey }?.photoPath
+    }
+
+    /** All of today's dose photos, keyed by doseKey, for the Today screen to render thumbnails from. */
+    suspend fun todayPhotoPaths(): Map<String, String> = withContext(Dispatchers.IO) {
+        db.doseLogDao().getForDate(todayKey())
+            .mapNotNull { entry -> entry.photoPath?.let { entry.doseKey to it } }
+            .toMap()
     }
 
     suspend fun weightLog(): List<WeightEntity> = withContext(Dispatchers.IO) { db.weightDao().recent() }
     suspend fun glucoseLog(): List<GlucoseEntity> = withContext(Dispatchers.IO) { db.glucoseDao().recent() }
 
-    /** [onDate] overrides "today" — used when importing a chat-logged entry for a past date. */
-    suspend fun addWeight(kg: Double, onDate: String? = null, note: String = "") = withContext(Dispatchers.IO) {
+    /** [onDate] overrides "today" — used when importing a chat-logged entry for a past date.
+     *  [source] defaults to "manual"; Health Connect sync passes "health_connect" and only
+     *  ever calls this for a date that [weightExistsForDate] has already confirmed is empty. */
+    suspend fun addWeight(kg: Double, onDate: String? = null, note: String = "", source: String = "manual") = withContext(Dispatchers.IO) {
         val now = Date()
         db.weightDao().insert(
             WeightEntity(
                 date = onDate ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(now),
                 time = SimpleDateFormat("HH:mm", Locale.US).format(now),
-                kg = kg, note = note
+                kg = kg, note = note, source = source
             )
         )
     }
+
+    /** True if any weight row (manual or previously synced) already exists for [date] —
+     *  the gap-fill rule Health Connect sync uses to never clobber a day you've already logged. */
+    suspend fun weightExistsForDate(date: String): Boolean = withContext(Dispatchers.IO) {
+        db.weightDao().existsForDate(date)
+    }
+
+    // --- Steps (Health Connect sync only — no manual entry UI for this) ---
+
+    suspend fun upsertSteps(date: String, count: Int) = withContext(Dispatchers.IO) {
+        db.stepsDao().upsert(StepsEntity(date = date, stepCount = count, syncedAtIso = java.time.Instant.now().toString()))
+    }
+
+    suspend fun stepsLog(): List<StepsEntity> = withContext(Dispatchers.IO) { db.stepsDao().since(dateDaysAgo(29)) }
 
     suspend fun addGlucose(value: Int, type: String, onDate: String? = null) = withContext(Dispatchers.IO) {
         val now = Date()
@@ -120,7 +162,7 @@ class Repository(private val db: AppDatabase, private val appContext: Context) {
                 type = type, minutes = minutes, note = note
             )
         )
-        SyncRepository.pushTodayStatus(this@Repository)
+        SyncRepository.pushToday(this@Repository)
     }
 
     /** Same as [addExercise] but for a chat-imported entry that may name a past date. */
@@ -175,7 +217,10 @@ class Repository(private val db: AppDatabase, private val appContext: Context) {
             medications = db.medicationDao().getAll(),
             doseLog = db.doseLogDao().since(from),
             exerciseLog = db.exerciseDao().since(from),
-            sleepLog = db.sleepDao().since(from)
+            sleepLog = db.sleepDao().since(from),
+            weightLog = db.weightDao().since(from),
+            glucoseLog = db.glucoseDao().since(from),
+            stepsLog = db.stepsDao().since(from)
         )
     }
 

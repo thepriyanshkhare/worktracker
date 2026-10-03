@@ -57,6 +57,9 @@ dependencies {
     // Read-only: this app only ever listens to Firestore, never writes.
     implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
     implementation("com.google.firebase:firebase-firestore-ktx")
+    // Anonymous auth required by firestore.rules (Oct 2026 hardening) — the Supervisor
+    // app must sign in before it can read either document.
+    implementation("com.google.firebase:firebase-auth-ktx")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

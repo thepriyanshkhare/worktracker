@@ -7,13 +7,24 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- INTERNET was added deliberately (Sep 2026) for one narrow purpose: pushing a
-         same-day Done/Pending/Not-Done status per section (Medicine, Food, Exercise) to
-         Firestore so the separate supervisor app (for parents) can show it. That push is
-         the ONLY network traffic this app ever makes — no medication names, doses,
-         glucose/weight values, or notes ever leave the device. See SyncRepository.kt.
-         The encrypted health database itself remains fully local; allowBackup stays false. -->
+    <!-- INTERNET was added deliberately (Sep 2026) for one narrow purpose: pushing today's
+         status to Firestore so the separate supervisor app (for parents) can show it — a
+         tri-state summary per section (Medicine, Food, Exercise), plus (as of Oct 2026, an
+         explicit choice) actual medicine/food names, exercise detail, and recent weight.
+         Glucose and free-text notes still never leave the device. That push is the ONLY
+         network traffic this app ever makes. See SyncRepository.kt. The encrypted health
+         database itself remains fully local; allowBackup stays false. -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Health Connect (Oct 2026): read-only access to Weight and Steps, auto-filling the
+         same weight_log/steps_log data a manual entry would — never written to, and sleep/
+         heart rate are deliberately not requested. See HealthConnectRepository.kt. -->
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
 
     <application
         android:allowBackup="false"
@@ -44,6 +55,42 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Required by Health Connect: shows the user this app's data-use rationale when they
+             tap the privacy-policy link on Health Connect's own permission screen. This app
+             is side-loaded (not Play-distributed), so a trivial local explanation screen is
+             shown instead of a hosted privacy-policy URL. -->
+        <activity
+            android:name=".health.PermissionsRationaleActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".health.PermissionsRationaleActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Lets the stock Camera app write an optional food-entry photo into this app's
+             private dose_photos/ folder via a content:// URI. No CAMERA permission is
+             requested here — TakePicture() delegates capture to the Camera app itself. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.septuary.app.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 </manifest>

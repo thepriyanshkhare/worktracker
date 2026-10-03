@@ -18,9 +18,10 @@ import net.sqlcipher.database.SupportFactory
         GoalEntity::class,
         FlagEntity::class,
         ExerciseLogEntity::class,
-        SleepEntity::class
+        SleepEntity::class,
+        StepsEntity::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,6 +33,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun flagDao(): FlagDao
     abstract fun exerciseDao(): ExerciseDao
     abstract fun sleepDao(): SleepDao
+    abstract fun stepsDao(): StepsDao
 
     companion object {
         /** Adds the exercise_log table. Existing meds/weight/glucose/goals/flags data is untouched. */
@@ -74,6 +76,33 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds an optional photoPath column to dose_log, so a food/coffee/tea/meal entry can
+         *  carry a user-attached photo. Null for every existing row and for medication/non-photo
+         *  entries going forward. */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE dose_log ADD COLUMN photoPath TEXT")
+            }
+        }
+
+        /** Adds a `source` column to weight_log (tags manual vs. Health-Connect-synced rows;
+         *  every existing row defaults to 'manual', so nothing already logged changes meaning)
+         *  and the steps_log table for Health Connect step-count sync. */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE weight_log ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS steps_log (
+                        date TEXT NOT NULL PRIMARY KEY,
+                        stepCount INTEGER NOT NULL,
+                        syncedAtIso TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         /**
          * Opens (or creates) the encrypted database using [passphrase] as the SQLCipher key.
          * A wrong passphrase throws when the DB is first touched — that's how PIN verification
@@ -84,7 +113,7 @@ abstract class AppDatabase : RoomDatabase() {
             val factory = SupportFactory(SQLiteDatabase.getBytes(passphrase))
             return Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "septuary_encrypted.db")
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
         }
     }

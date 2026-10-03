@@ -69,7 +69,9 @@ fun App() {
                         // anything's been toggled in the app itself.
                         launch {
                             com.septuary.app.data.SyncRepository.importInbox(newRepo)
-                            com.septuary.app.data.SyncRepository.pushTodayStatus(newRepo)
+                            com.septuary.app.data.SyncRepository.checkReminders(context, newRepo)
+                            com.septuary.app.data.HealthConnectRepository.sync(context, newRepo)
+                            com.septuary.app.data.SyncRepository.pushToday(newRepo)
                         }
                     } catch (e: Exception) {
                         errorMessage = if (isSetup) "Something went wrong setting up. Try again." else "Wrong PIN. Try again."
@@ -104,7 +106,7 @@ fun MainScaffold(repo: Repository, onLock: () -> Unit) {
                 Tab.TRENDS -> TrendsScreen(repo)
                 Tab.LOG -> LogScreen(repo)
                 Tab.GOALS -> GoalsScreen(repo)
-                Tab.SETTINGS -> SettingsScreen(onLock = onLock)
+                Tab.SETTINGS -> SettingsScreen(repo = repo, onLock = onLock)
             }
         }
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Exposes only the dose_photos/ subfolder of app-private internal storage to the
+     FileProvider, so the stock Camera app can write a captured photo there via a
+     content:// URI without granting broader filesystem access. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="dose_photos" path="dose_photos/" />
+</paths>

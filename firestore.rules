@@ -2,23 +2,45 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Oct 2026 security hardening: the collection name itself is an unguessable random
+    // token (not just "septuary") AND every rule below requires request.auth != null.
+    // Both apps sign in with Firebase Anonymous Auth before touching Firestore (see
+    // SyncRepository.kt / Supervisor MainActivity.kt), so this blocks casual discovery,
+    // automated scanning, and any raw/unauthenticated REST call against the project —
+    // the realistic threat for a personal app. It does NOT defend against a determined
+    // attacker who decompiles the APK and replicates the anonymous sign-in call; closing
+    // that gap needs a server-side secret never embedded in either app, which this
+    // project deliberately did not take on. Change the token below if it's ever leaked.
+
     // Written by the Septuary app after every dose toggle / exercise log.
-    // Read by the Supervisor app (parents) — no login on either side, so this is
-    // deliberately open, but scoped to exactly this one document: nothing else in
-    // the project is reachable through these rules.
-    match /septuary/status {
-      allow read: if true;
-      allow write: if true; // the Septuary app writes with no user auth
+    // Read by the Supervisor app (parents).
+    match /septuary_86800832c1af658f9d30a04276952c81/status {
+      allow read, write: if request.auth != null;
+    }
+
+    // Full-detail doc: medicine names, food items, exercise detail, and recent weight
+    // values shown to the parents' app. An intentional, explicitly-approved loosening
+    // of the original "status only, no names/values" posture above — same auth-gated
+    // rule, scoped to exactly this one document.
+    match /septuary_86800832c1af658f9d30a04276952c81/detail {
+      allow read, write: if request.auth != null;
     }
 
     // Entries queued by the Claude chat session, written with an admin service-account
-    // credential (bypasses these rules entirely) and drained/deleted by the Septuary
-    // app on unlock. Client reads/writes are denied — only the admin credential and
-    // the Septuary app's own delete-after-import need access, and the app authenticates
-    // that delete implicitly by being the only other party with the project's API key.
-    match /septuary_inbox/{entryId} {
-      allow read: if false;
-      allow write: if true; // Septuary app needs to delete consumed entries; see note above
+    // credential (bypasses these rules entirely — admin SDK requests are never subject
+    // to security rules) and drained/deleted by the Septuary app on unlock, which needs
+    // both read (to fetch pending entries) and write (to delete consumed ones).
+    match /septuary_86800832c1af658f9d30a04276952c81_inbox/{entryId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Reminder requests from the parents' Supervisor app (its first-ever write — everything
+    // else it does is read-only). Drained, shown as a local notification, and deleted by the
+    // Septuary app on unlock, so it fires exactly once — a one-shot, in-app nudge, never a
+    // true push (no Cloud Function/FCM involved, by deliberate choice — see push_to_septuary
+    // for the only other writer that bypasses these rules entirely).
+    match /septuary_86800832c1af658f9d30a04276952c81_reminders/{reminderId} {
+      allow read, write: if request.auth != null;
     }
 
     // Everything else stays locked down.

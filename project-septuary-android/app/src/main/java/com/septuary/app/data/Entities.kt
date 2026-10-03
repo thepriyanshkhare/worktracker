@@ -24,7 +24,10 @@ data class MedicationEntity(
 data class DoseLogEntity(
     val doseKey: String,     // medicationId + "@" + time
     val date: String,        // "YYYY-MM-DD"
-    val takenAtIso: String
+    val takenAtIso: String,
+    // Relative path under filesDir (e.g. "dose_photos/xxx.jpg"), set only when the user
+    // optionally attaches a photo to a food/coffee/tea/meal entry. Null for everything else.
+    val photoPath: String? = null
 )
 
 @Entity(tableName = "weight_log")
@@ -33,7 +36,17 @@ data class WeightEntity(
     val date: String,
     val time: String,
     val kg: Double,
-    val note: String
+    val note: String,
+    // "manual" (logged in-app) | "health_connect" (auto-synced). Health Connect only ever
+    // fills a date that has no row yet — a manual entry always wins and is never overwritten.
+    val source: String = "manual"
+)
+
+@Entity(tableName = "steps_log")
+data class StepsEntity(
+    @PrimaryKey val date: String,   // "YYYY-MM-DD" — one row per day, upserted as the count changes
+    val stepCount: Int,
+    val syncedAtIso: String
 )
 
 @Entity(tableName = "glucose_log")

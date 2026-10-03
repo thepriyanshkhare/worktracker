@@ -17,11 +17,21 @@ object Trends {
     const val EXERCISE_DAILY_TARGET_MIN = 45
     const val SLEEP_TARGET_HOURS = 7.5
 
+    // Simple glucose banding: "Fasting" readings target <=100 mg/dL, anything else (PP / PP
+    // (night)) targets <=140 mg/dL — 2 points off per mg/dL over target, floored at 0.
+    private const val FASTING_TARGET_MGDL = 100
+    private const val POST_MEAL_TARGET_MGDL = 140
+
     data class RawData(
         val medications: List<MedicationEntity>,
         val doseLog: List<DoseLogEntity>,
         val exerciseLog: List<ExerciseLogEntity>,
-        val sleepLog: List<SleepEntity>
+        val sleepLog: List<SleepEntity>,
+        // Not part of every call site historically (e.g. older callers before this was added) —
+        // default to empty so weight/glucose rollups degrade to "no data" rather than crashing.
+        val weightLog: List<WeightEntity> = emptyList(),
+        val glucoseLog: List<GlucoseEntity> = emptyList(),
+        val stepsLog: List<StepsEntity> = emptyList()
     )
 
     data class DayScore(
@@ -30,7 +40,15 @@ object Trends {
         val food: Int?,
         val exercise: Int,
         val sleep: Int?,
-        val overall: Int
+        val overall: Int,
+        // Weight/glucose are shown alongside Overall, never folded into it — weight has no
+        // inherent "good/bad" direction without a personal goal, so blending it into a single
+        // 0-100 score would be misleading rather than informative.
+        val weight: Double? = null,
+        val glucoseInRange: Int? = null,
+        // Raw step count, same treatment as weight — no inherent good/bad direction without a
+        // personal goal, so it's shown as its own row rather than folded into Overall.
+        val steps: Int? = null
     )
 
     /** [dates] must be "YYYY-MM-DD" strings, any order; results come back in the same order. */
@@ -43,6 +61,9 @@ object Trends {
             data.doseLog.groupBy { it.date }.mapValues { e -> e.value.map { it.doseKey }.toSet() }
         val exerciseByDate = data.exerciseLog.groupBy { it.date }
         val sleepByDate = data.sleepLog.groupBy { it.date }
+        val weightByDate = data.weightLog.groupBy { it.date }
+        val glucoseByDate = data.glucoseLog.groupBy { it.date }
+        val stepsByDate = data.stepsLog.associateBy { it.date }
 
         return dates.map { date ->
             val takenKeys = takenByDate[date] ?: emptySet()
@@ -68,12 +89,34 @@ object Trends {
             val parts = listOfNotNull(medScore, foodScore, exerciseScore, sleepScore)
             val overall = if (parts.isEmpty()) 0 else parts.sum() / parts.size
 
-            DayScore(date, medScore, foodScore, exerciseScore, sleepScore, overall)
+            // Weight: that day's latest reading, shown as-is (no 0-100 scoring — see DayScore doc).
+            val weightToday = weightByDate[date]?.lastOrNull()?.kg
+
+            // Glucose: average of that day's per-reading band scores, or null if nothing logged.
+            val glucoseReadings = glucoseByDate[date].orEmpty()
+            val glucoseScore = if (glucoseReadings.isEmpty()) null else {
+                val perReading = glucoseReadings.map { g ->
+                    val target = if (g.type.startsWith("Fasting", ignoreCase = true)) FASTING_TARGET_MGDL else POST_MEAL_TARGET_MGDL
+                    val excess = (g.value - target).coerceAtLeast(0)
+                    (100 - excess * 2).coerceIn(0, 100)
+                }
+                perReading.sum() / perReading.size
+            }
+
+            val stepsToday = stepsByDate[date]?.stepCount
+
+            DayScore(date, medScore, foodScore, exerciseScore, sleepScore, overall, weightToday, glucoseScore, stepsToday)
         }
     }
 
     /** Average of the non-null scores in [scores] for one category selector; null if none had data. */
     fun average(scores: List<DayScore>, pick: (DayScore) -> Int?): Int? {
+        val vals = scores.mapNotNull(pick)
+        return if (vals.isEmpty()) null else vals.sum() / vals.size
+    }
+
+    /** Same as [average] but for a Double-valued field (weight) rather than a 0-100 score. */
+    fun averageDouble(scores: List<DayScore>, pick: (DayScore) -> Double?): Double? {
         val vals = scores.mapNotNull(pick)
         return if (vals.isEmpty()) null else vals.sum() / vals.size
     }

@@ -66,11 +66,18 @@ dependencies {
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // Cloud sync: pushes only a same-day Done/Pending/Not-Done status per section
-    // (Medicine, Food, Exercise) to Firestore for the parents' supervisor app to read.
-    // Never syncs medication names, doses, glucose/weight values, or notes — see SyncRepository.kt.
+    // Cloud sync: pushes today's status to Firestore for the parents' supervisor app to
+    // read — a tri-state summary per section (Medicine, Food, Exercise), plus an explicit,
+    // approved detail doc (medicine/food names, exercise detail, recent weight). Glucose and
+    // free-text notes are never synced — see SyncRepository.kt.
     implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
     implementation("com.google.firebase:firebase-firestore-ktx")
+    // Anonymous auth required by firestore.rules (Oct 2026 hardening) — blocks any
+    // unauthenticated client from reading/writing, even if the project is discovered.
+    implementation("com.google.firebase:firebase-auth-ktx")
+
+    // Health Connect: read-only Weight + Steps auto-sync. See HealthConnectRepository.kt.
+    implementation("androidx.health.connect:connect-client:1.2.0-alpha06")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
