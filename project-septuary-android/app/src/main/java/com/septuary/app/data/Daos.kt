@@ -15,6 +15,9 @@ interface MedicationDao {
 
     @Query("SELECT COUNT(*) FROM medications")
     suspend fun count(): Int
+
+    @Query("UPDATE medications SET time = :time WHERE id = :id")
+    suspend fun updateTime(id: String, time: String)
 }
 
 @Dao

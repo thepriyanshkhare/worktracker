@@ -8,23 +8,35 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.health.connect.client.PermissionController
 import com.septuary.app.data.HealthConnectRepository
+import com.septuary.app.data.MedicationEntity
 import com.septuary.app.data.Repository
+import com.septuary.app.data.scheduleLabel
 import com.septuary.app.ui.theme.*
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(repo: Repository, onLock: () -> Unit) {
     val context = LocalContext.current
@@ -36,8 +48,12 @@ fun SettingsScreen(repo: Repository, onLock: () -> Unit) {
     var hcGranted by remember { mutableStateOf(false) }
     var hcSyncing by remember { mutableStateOf(false) }
 
+    var medications by remember { mutableStateOf(listOf<MedicationEntity>()) }
+    var editingMed by remember { mutableStateOf<MedicationEntity?>(null) }
+
     LaunchedEffect(Unit) {
         if (hcAvailable) hcGranted = HealthConnectRepository.hasAllPermissions(context)
+        medications = repo.medications()
     }
 
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -100,6 +116,52 @@ fun SettingsScreen(repo: Repository, onLock: () -> Unit) {
 
         Spacer(Modifier.height(12.dp))
 
+        Card(title = "Medications") {
+            Text(
+                "Tap a medicine to change its scheduled time — its reminder reschedules to match. " +
+                    "The time only ever changes here, deliberately: logging a dose late or early " +
+                    "never shifts it on its own.",
+                color = TextMuted, fontSize = 12.sp
+            )
+            Spacer(Modifier.height(10.dp))
+            val meds = medications.filter { it.category == "medication" }
+            if (meds.isEmpty()) {
+                Text("No medicines set up.", color = TextMuted, fontSize = 13.sp)
+            } else {
+                meds.forEach { med ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { editingMed = med }
+                            .padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(med.name, color = TextMain, fontSize = 14.sp)
+                            Text(scheduleLabel(med.days), color = TextMuted, fontSize = 11.sp)
+                        }
+                        Text(med.time, color = Accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+
+        editingMed?.let { med ->
+            MedicationTimeEditDialog(
+                med = med,
+                onDismiss = { editingMed = null },
+                onConfirm = { newTime ->
+                    scope.launch {
+                        repo.updateMedicationTime(med.id, newTime)
+                        medications = repo.medications()
+                        editingMed = null
+                    }
+                }
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
         Card(title = "Health Connect") {
             val statusText = when {
                 !hcAvailable -> "Not available on this device"
@@ -149,6 +211,39 @@ fun SettingsScreen(repo: Repository, onLock: () -> Unit) {
         Card(title = "Session") {
             Button(onClick = onLock, colors = ButtonDefaults.buttonColors(containerColor = Panel2, contentColor = Danger)) {
                 Text("Lock now")
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MedicationTimeEditDialog(med: MedicationEntity, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    val parts = remember(med.time) { med.time.split(":").map { it.toIntOrNull() ?: 0 } }
+    val state = rememberTimePickerState(
+        initialHour = parts.getOrElse(0) { 0 },
+        initialMinute = parts.getOrElse(1) { 0 },
+        is24Hour = true
+    )
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(color = Panel, shape = RoundedCornerShape(16.dp)) {
+            Column(Modifier.padding(20.dp)) {
+                Text("Change time — ${med.name}", color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "The reminder moves with it; today's already-logged history for this medicine is untouched.",
+                    color = TextMuted, fontSize = 12.sp
+                )
+                Spacer(Modifier.height(14.dp))
+                TimePicker(state = state)
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = { onConfirm("%02d:%02d".format(state.hour, state.minute)) }) {
+                        Text("Save")
+                    }
+                }
             }
         }
     }

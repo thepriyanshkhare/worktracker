@@ -8,6 +8,18 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
+/** Human-readable form of a medication's `days` field, e.g. "Daily" or "Every Wed" — shared by
+ *  Settings (medicine-edit list) and SyncRepository (the routine pushed to the Supervisor app). */
+fun scheduleLabel(days: String): String {
+    if (days == "daily") return "Daily"
+    if (days.startsWith("weekly:")) {
+        val dow = days.substringAfter(":").toIntOrNull()
+        val names = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+        return "Every " + (names.getOrNull(dow ?: -1) ?: "week")
+    }
+    return days
+}
+
 /** Thin wrapper around the encrypted DB. All calls are suspend + run on IO dispatcher. */
 class Repository(private val db: AppDatabase, private val appContext: Context) {
 
@@ -23,6 +35,20 @@ class Repository(private val db: AppDatabase, private val appContext: Context) {
     }
 
     suspend fun medications(): List<MedicationEntity> = withContext(Dispatchers.IO) { db.medicationDao().getAll() }
+
+    /** Changes a medication's scheduled time (deliberate, user-initiated — the time never
+     *  drifts just because a dose was logged late). Cancels the alarm scheduled under the old
+     *  doseKey (id@oldTime) — since doseKey is derived from time, the old PendingIntent would
+     *  otherwise keep firing — then rebuilds the schedule cache so the reminder keeps working,
+     *  just at the new time. Today's already-logged dose history (keyed by the old doseKey)
+     *  is untouched, as a historical record of what actually happened. */
+    suspend fun updateMedicationTime(medId: String, newTime: String) = withContext(Dispatchers.IO) {
+        val before = db.medicationDao().getAll().find { it.id == medId } ?: return@withContext
+        db.medicationDao().updateTime(medId, newTime)
+        AlarmScheduler.cancel(appContext, before.id + "@" + before.time)
+        AlarmScheduler.rescheduleAll(appContext, db.medicationDao().getAll())
+        SyncRepository.pushToday(this@Repository)
+    }
 
     fun todayKey(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 

@@ -131,18 +131,30 @@ object SyncRepository {
     }
 
     /**
-     * Pushes the full-detail doc the parents' app now reads: medicine names (with done/pending),
-     * food items (name/category/time/done), today's exercise, and a short recent weight trend.
-     * Glucose is intentionally excluded — not part of the agreed detail set.
+     * Pushes the full-detail doc the parents' app now reads: the complete standing medicine
+     * routine (every active medication, whether or not it's due today — so a weekly medicine
+     * doesn't silently vanish from what parents see on its off days), food items for today
+     * (name/category/time/done), today's exercise, and a short recent weight trend. Glucose is
+     * intentionally excluded — not part of the agreed detail set.
      */
     suspend fun pushTodayDetail(repo: Repository) = withContext(Dispatchers.IO) {
         try {
             if (!ensureAuth()) return@withContext
+            val today = repo.todayKey()
             val doses = repo.todayDoses()
             val done = repo.todayLog()
 
-            val medicineItems = doses.filter { it.category == "medication" }.map {
-                mapOf("name" to it.name, "time" to it.time, "done" to done.contains(it.doseKey))
+            // Medicine: the full routine, not just today's slice — Oct 2026, requested so
+            // parents always see the whole regimen, not only what happens to be due today.
+            val medicineItems = repo.medications().filter { it.category == "medication" }.map { med ->
+                val dueToday = repo.isMedActiveOnDate(med, today)
+                mapOf(
+                    "name" to med.name,
+                    "time" to med.time,
+                    "schedule" to scheduleLabel(med.days),
+                    "dueToday" to dueToday,
+                    "done" to (dueToday && done.contains(med.id + "@" + med.time))
+                )
             }
             val foodItems = doses.filter { it.category != "medication" }.map {
                 mapOf("name" to it.name, "category" to it.category, "time" to it.time, "done" to done.contains(it.doseKey))

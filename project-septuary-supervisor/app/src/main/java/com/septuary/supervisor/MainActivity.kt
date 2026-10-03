@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -71,8 +72,10 @@ data class SectionStatus(val label: String, val wire: String?) {
     }
 }
 
-/** One medicine or food item as reported in septuary/detail. */
-data class DetailItem(val name: String, val label: String, val done: Boolean)
+/** One medicine or food item as reported in septuary/detail. [dueToday] is always true for
+ *  food items (already filtered to today); for medicine it reflects the full standing routine
+ *  — a medicine not due today (e.g. a weekly one, off-day) still shows, just dimmed. */
+data class DetailItem(val name: String, val label: String, val done: Boolean, val dueToday: Boolean = true)
 
 /**
  * This app reads two small Firestore documents the Septuary app pushes to: the status doc
@@ -134,10 +137,16 @@ fun StatusScreen() {
                 @Suppress("UNCHECKED_CAST")
                 val rawMedicine = snap.get("medicineItems") as? List<Map<String, Any>> ?: emptyList()
                 medicineItems = rawMedicine.map {
+                    val dueToday = it["dueToday"] as? Boolean ?: true
+                    val schedule = it["schedule"] as? String ?: ""
+                    val time = it["time"] as? String ?: ""
+                    val label = listOf(schedule, time).filter { s -> s.isNotBlank() }.joinToString(" — ") +
+                        (if (!dueToday) " · not due today" else "")
                     DetailItem(
                         name = it["name"] as? String ?: "",
-                        label = it["time"] as? String ?: "",
-                        done = it["done"] as? Boolean ?: false
+                        label = label,
+                        done = it["done"] as? Boolean ?: false,
+                        dueToday = dueToday
                     )
                 }
                 @Suppress("UNCHECKED_CAST")
@@ -271,7 +280,8 @@ fun DetailListRow(item: DetailItem) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .alpha(if (item.dueToday) 1f else 0.5f),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -281,12 +291,14 @@ fun DetailListRow(item: DetailItem) {
                 Text(item.label, color = TextMuted, fontSize = 11.sp)
             }
         }
-        Icon(
-            if (item.done) Icons.Filled.CheckCircle else Icons.Filled.Circle,
-            contentDescription = null,
-            tint = if (item.done) Green else TextMuted,
-            modifier = Modifier.size(16.dp)
-        )
+        if (item.dueToday) {
+            Icon(
+                if (item.done) Icons.Filled.CheckCircle else Icons.Filled.Circle,
+                contentDescription = null,
+                tint = if (item.done) Green else TextMuted,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 
