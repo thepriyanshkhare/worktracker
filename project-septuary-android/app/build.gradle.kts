@@ -8,12 +8,15 @@ plugins {
 
 android {
     namespace = "com.septuary.app"
-    compileSdk = 34
+    // androidx.health.connect:connect-client:1.2.0-alpha06 requires compiling against API 35
+    // (AAR metadata check fails below 35) — bumped from 34 for Health Connect. AGP 8.5.2
+    // already supports compileSdk 35, so no other toolchain changes were needed.
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.septuary.app"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
     }
