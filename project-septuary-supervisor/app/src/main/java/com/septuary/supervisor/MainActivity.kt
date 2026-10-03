@@ -200,14 +200,10 @@ fun StatusScreen() {
 
         Spacer(Modifier.height(20.dp))
 
-        if (medicineItems.isNotEmpty()) {
-            DetailSection("Medicines", medicineItems)
-            Spacer(Modifier.height(16.dp))
-        }
-        if (foodItems.isNotEmpty()) {
-            DetailSection("Food & Drinks", foodItems)
-            Spacer(Modifier.height(16.dp))
-        }
+        DetailSection("Medicines", medicineItems, emptyText = "No medicines scheduled yet.")
+        Spacer(Modifier.height(16.dp))
+        DetailSection("Food & Drinks", foodItems, emptyText = "No food or drinks logged yet.")
+        Spacer(Modifier.height(16.dp))
 
         ExerciseSection(exerciseItems)
         Spacer(Modifier.height(16.dp))
@@ -241,18 +237,32 @@ fun Banner(text: String, color: Color) {
     }
 }
 
-/** A titled list of medicine or food items, each styled like a smaller [SectionRow]. */
+/** A titled list of medicine or food items, each styled like a smaller [SectionRow]. Always
+ *  renders — an empty list shows [emptyText] instead of disappearing, matching how
+ *  [ExerciseSection]/[WeightSection] handle "nothing logged yet" rather than hiding the card. */
 @Composable
-fun DetailSection(title: String, items: List<DetailItem>) {
+fun DetailSection(title: String, items: List<DetailItem>, emptyText: String) {
     Text(title.uppercase(), color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     Spacer(Modifier.height(8.dp))
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Panel)
-    ) {
-        items.forEach { item -> DetailListRow(item) }
+    if (items.isEmpty()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(Panel)
+                .padding(16.dp)
+        ) {
+            Text(emptyText, color = TextMuted, fontSize = 13.sp)
+        }
+    } else {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(Panel)
+        ) {
+            items.forEach { item -> DetailListRow(item) }
+        }
     }
 }
 
