@@ -8,15 +8,12 @@ plugins {
 
 android {
     namespace = "com.septuary.app"
-    // androidx.health.connect:connect-client:1.2.0-alpha06 requires compiling against API 35
-    // (AAR metadata check fails below 35) — bumped from 34 for Health Connect. AGP 8.5.2
-    // already supports compileSdk 35, so no other toolchain changes were needed.
-    compileSdk = 35
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.septuary.app"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
     }
@@ -80,7 +77,10 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
 
     // Health Connect: read-only Weight + Steps auto-sync. See HealthConnectRepository.kt.
-    implementation("androidx.health.connect:connect-client:1.2.0-alpha06")
+    // Pinned to the stable 1.1.0 release rather than the 1.2.0 alpha line — the 1.2.0-alpha06
+    // build requires compiling against API 37 (not yet available on CI/most toolchains);
+    // 1.1.0 needs only API 34, which this app already compiles against.
+    implementation("androidx.health.connect:connect-client:1.1.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
