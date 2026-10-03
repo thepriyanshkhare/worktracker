@@ -77,10 +77,14 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
 
     // Health Connect: read-only Weight + Steps auto-sync. See HealthConnectRepository.kt.
-    // Pinned to the stable 1.1.0 release rather than the 1.2.0 alpha line — the 1.2.0-alpha06
-    // build requires compiling against API 37 (not yet available on CI/most toolchains);
-    // 1.1.0 needs only API 34, which this app already compiles against.
-    implementation("androidx.health.connect:connect-client:1.1.0")
+    // Pinned to this older point release deliberately: every newer release line (1.1.0 stable,
+    // 1.2.0-alpha) has bumped its required compileSdk past what this toolchain (AGP 8.5.2,
+    // compileSdk 34) supports (API 36, then API 37) — Health Connect's own compileSdk floor
+    // has been rising faster than this app's toolchain. 1.1.0-alpha07 (Jan 2024, pre-dating
+    // those bumps) only requires API 34 and exposes the exact same APIs this app uses
+    // (PermissionController, HealthPermission, WeightRecord, StepsRecord, ReadRecordsRequest/
+    // AggregateRequest, TimeRangeFilter).
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha07")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

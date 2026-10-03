@@ -47,7 +47,7 @@ jobs:
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             echo "----- Extracted error lines -----"
-            grep -n -A 6 -E "error:|FAILURE:|^e: |Exception|Caused by:|issues were found|requires libraries and applications" build_output.log | head -120 | tee build_errors.txt
+            grep -n -A 20 -E "error:|FAILURE:|^e: |Exception|Caused by:|issues were found|requires libraries and applications" build_output.log | head -200 | tee build_errors.txt
             # Emit as workflow error annotations so they're retrievable via the Checks API
             # (the full raw log is stored on a blob host that's unreachable from the diagnosing
             # session in this case; annotations go through the regular GitHub API instead).
