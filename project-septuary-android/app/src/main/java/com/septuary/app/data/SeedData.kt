@@ -84,7 +84,12 @@ object SeedData {
     val weightLog = listOf(
         WeightEntity(date = "2026-09-27", time = "22:00", kg = 93.8, note = "Off-protocol (evening) — early water-weight drop, don't extrapolate"),
         WeightEntity(date = "2026-09-28", time = "06:30", kg = 93.2, note = "On-protocol (morning, pre-food)"),
-        WeightEntity(date = "2026-09-29", time = "20:49", kg = 92.75, note = "Off-protocol (evening, new BIA scale) — BF% 28.9%, BMI 27.4, visceral fat index 10")
+        WeightEntity(date = "2026-09-29", time = "20:49", kg = 92.75, note = "Off-protocol (evening, new BIA scale) — BF% 28.9%, BMI 27.4, visceral fat index 10"),
+        WeightEntity(date = "2026-09-30", time = "06:30", kg = 91.60, note = "On-protocol (morning, pre-food)"),
+        WeightEntity(date = "2026-10-03", time = "08:44", kg = 92.30, note = "On-protocol (Saturday morning, pre-food)"),
+        WeightEntity(date = "2026-10-04", time = "20:00", kg = 91.45, note = "Off-protocol (evening)"),
+        WeightEntity(date = "2026-10-05", time = "08:00", kg = 90.45, note = "Time not logged"),
+        WeightEntity(date = "2026-10-06", time = "08:00", kg = 89.80, note = "Time not logged")
     )
 
     val glucoseLog = listOf(
@@ -111,10 +116,10 @@ object SeedData {
     val flags = listOf(
         FlagEntity(text = "Tab Homin — identified as B12, substituted with Neurobion Forte", resolved = true),
         FlagEntity(text = "Rosuvas F 10 — not started, continuing Roseday-F only (confirm with Dr. Harshitha)", resolved = true),
-        FlagEntity(text = "Udiliv active status — missing from Dr. Harshitha's current-meds list, confirm with Dr. Ayer", resolved = false),
+        FlagEntity(text = "Udiliv 300 — confirmed active as a 1-month course (6 Oct); get an extend-or-stop decision before it ends", resolved = true),
         FlagEntity(text = "Two-doctor coordination gap — Dr. Ayer's workup vs. Dr. Harshitha's additions not cross-confirmed", resolved = false),
         FlagEntity(text = "Echo/Holter — still open; 4 independent tachycardia readings (106-135 bpm) across 3 doctors", resolved = false),
-        FlagEntity(text = "GAD antibody / C-peptide — determines Type 2 vs. autoimmune diabetes classification", resolved = false),
+        FlagEntity(text = "Diabetes type — confirmed Type 2 (6 Oct)", resolved = true),
         FlagEntity(text = "FibroScan Liver, urine microalbumin — pending completion", resolved = false)
     )
 }
