@@ -106,7 +106,7 @@ object SeedData {
     )
 
     val goals = listOf(
-        GoalEntity(metric = "Weight", baseline = "95.0 kg (27 Sep)", phase1Target = "83.4 kg (29 Nov)", longTerm = "72.0 kg (from 1 Feb 2027, held indefinitely)"),
+        GoalEntity(metric = "Weight", baseline = "95.0 kg (27 Sep)", phase1Target = "80.0 kg (30 Nov; revised 6 Oct from 89.8 kg)", longTerm = "72.0 kg (30 Jan 2027, held indefinitely)"),
         GoalEntity(metric = "Waist", baseline = "42.0 in", phase1Target = "36.0 in (user-set stretch target, 29 Nov)", longTerm = "30.0 in (WHtR 0.41, athletic-lean)"),
         GoalEntity(metric = "Hips", baseline = "43.0 in", phase1Target = "~41.0-41.5 in", longTerm = "—"),
         GoalEntity(metric = "HbA1c", baseline = "10.5%", phase1Target = "~7.5-8.5% (12 weeks)", longTerm = "5.6% (full remission, 12-24 months; condition: Type 2 not autoimmune)"),
