@@ -118,7 +118,7 @@ object SeedData {
         FlagEntity(text = "Rosuvas F 10 — not started, continuing Roseday-F only (confirm with Dr. Harshitha)", resolved = true),
         FlagEntity(text = "Udiliv 300 — confirmed active as a 1-month course (6 Oct); get an extend-or-stop decision before it ends", resolved = true),
         FlagEntity(text = "Two-doctor coordination gap — Dr. Ayer's workup vs. Dr. Harshitha's additions not cross-confirmed", resolved = false),
-        FlagEntity(text = "Echo/Holter — still open; 4 independent tachycardia readings (106-135 bpm) across 3 doctors", resolved = false),
+        FlagEntity(text = "Echo/Holter — user reports cardiac health fine (6 Oct); intensity unlocked, progress gradually", resolved = true),
         FlagEntity(text = "Diabetes type — confirmed Type 2 (6 Oct)", resolved = true),
         FlagEntity(text = "FibroScan Liver, urine microalbumin — pending completion", resolved = false)
     )
