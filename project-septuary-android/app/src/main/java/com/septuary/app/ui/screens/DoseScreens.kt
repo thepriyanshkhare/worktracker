@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,7 +27,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import com.septuary.app.data.Repository
-import com.septuary.app.ui.MotivationQuotes
 import com.septuary.app.ui.theme.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -39,7 +39,7 @@ fun formatTime12h(t: String): String {
 }
 
 @Composable
-fun TodayScreen(repo: Repository) {
+fun DoseScreen(repo: Repository, medicine: Boolean) {
     val context = LocalContext.current
     var doses by remember { mutableStateOf(listOf<Repository.Dose>()) }
     var done by remember { mutableStateOf(setOf<String>()) }
@@ -92,51 +92,68 @@ fun TodayScreen(repo: Repository) {
     }
 
     LaunchedEffect(Unit) { reload() }
-    // Picked fresh each time this composable enters composition (i.e. each visit to the Today tab).
-    val quote = remember { MotivationQuotes.random() }
 
-    val medications = doses.filter { it.category == "medication" }
-    val reminders = doses.filter { it.category != "medication" }
+    val items = doses.filter { (it.category == "medication") == medicine }
+    var editing by remember { mutableStateOf<Repository.Dose?>(null) }
+    var notifOk by remember { mutableStateOf(hasNotifPermission(context) && hasExactAlarmPermission(context)) }
+    val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        notifOk = hasNotifPermission(context) && hasExactAlarmPermission(context)
+    }
 
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .background(Panel2, RoundedCornerShape(12.dp))
-                .padding(12.dp)
-        ) {
-            Text(quote, color = TextMain, fontSize = 13.sp, lineHeight = 18.sp)
+        if (!notifOk) {
+            Row(
+                Modifier.fillMaxWidth().background(Panel2, RoundedCornerShape(12.dp)).padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Reminders are off", color = TextMain, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Text(
+                    "Fix", color = Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickableSimple {
+                        if (!hasNotifPermission(context)) {
+                            notifLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            context.startActivity(
+                                android.content.Intent(
+                                    android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                    Uri.parse("package:" + context.packageName)
+                                )
+                            )
+                        }
+                    }
+                )
+            }
+            Spacer(Modifier.height(12.dp))
         }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "${done.size} / ${doses.size} taken today",
-            color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 10.dp)
-        )
-
         DoseSection(
-            title = "Medications",
-            subtitle = "${medications.count { done.contains(it.doseKey) }}/${medications.size}",
-            doses = medications, done = done,
-            photoPaths = photoPaths,
-            pendingPhotoDoseKey = pendingPhotoDoseKey,
-            onToggle = ::handleToggle,
-            onAddPhoto = {},
-            onSkipPhoto = { pendingPhotoDoseKey = null },
-            onViewPhoto = { viewingPhotoPath = it }
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        DoseSection(
-            title = "Daily Reminders",
-            subtitle = "${reminders.count { done.contains(it.doseKey) }}/${reminders.size}",
-            doses = reminders, done = done,
+            title = if (medicine) "Medicine" else "Food",
+            subtitle = "${items.count { done.contains(it.doseKey) }}/${items.size}",
+            doses = items, done = done,
             photoPaths = photoPaths,
             pendingPhotoDoseKey = pendingPhotoDoseKey,
             onToggle = ::handleToggle,
             onAddPhoto = { doseKey -> launchCameraFor(doseKey) },
             onSkipPhoto = { pendingPhotoDoseKey = null },
-            onViewPhoto = { viewingPhotoPath = it }
+            onViewPhoto = { viewingPhotoPath = it },
+            onEditTime = { editing = it }
+        )
+        if (medicine) {
+            Spacer(Modifier.height(8.dp))
+            Text("Tap a time to change it. The reminder moves with it.", color = TextMuted, fontSize = 11.sp)
+        }
+    }
+
+    editing?.let { d ->
+        TimeEditDialog(
+            title = d.name, initial = d.time,
+            onDismiss = { editing = null },
+            onConfirm = { newTime ->
+                scope.launch {
+                    repo.updateMedicationTime(d.medId, newTime)
+                    editing = null
+                    reload()
+                }
+            }
         )
     }
 
@@ -167,14 +184,15 @@ private fun DoseSection(
     onToggle: (Repository.Dose, Boolean) -> Unit,
     onAddPhoto: (String) -> Unit = {},
     onSkipPhoto: () -> Unit = {},
-    onViewPhoto: (String) -> Unit = {}
+    onViewPhoto: (String) -> Unit = {},
+    onEditTime: (Repository.Dose) -> Unit = {}
 ) {
     Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(title.uppercase(), color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         Text(subtitle, color = TextMuted, fontSize = 12.sp)
     }
     if (doses.isEmpty()) {
-        Text("Nothing scheduled.", color = TextMuted, fontSize = 13.sp)
+        Text("Nothing scheduled today.", color = TextMuted, fontSize = 13.sp)
     } else {
         Column(
             Modifier
@@ -216,7 +234,10 @@ private fun DoseSection(
                                     .clickableSimple { onViewPhoto(photoPath) }
                             )
                         }
-                        Text(formatTime12h(dose.time), color = TextMuted, fontSize = 12.sp)
+                        Text(
+                            formatTime12h(dose.time), color = Accent, fontSize = 12.sp,
+                            modifier = Modifier.clickableSimple { onEditTime(dose) }
+                        )
                     }
                     if (pendingPhotoDoseKey == dose.doseKey) {
                         Row(

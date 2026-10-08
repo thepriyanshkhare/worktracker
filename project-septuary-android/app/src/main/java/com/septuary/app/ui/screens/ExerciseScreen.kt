@@ -115,21 +115,6 @@ fun ExerciseScreen(repo: Repository) {
             }
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        Card(title = "Recent") {
-            if (recent.isEmpty()) {
-                Text("No history yet.", color = TextMuted, fontSize = 13.sp)
-            } else {
-                recent.take(15).forEach { e ->
-                    Text(
-                        "${e.date}  ${e.time}   ${e.type} — ${e.minutes} min",
-                        color = TextMuted, fontSize = 12.sp,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                }
-            }
-        }
     }
 }
 

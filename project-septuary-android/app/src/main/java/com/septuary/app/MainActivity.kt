@@ -7,11 +7,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -70,8 +68,7 @@ fun App() {
                         launch {
                             com.septuary.app.data.SyncRepository.importInbox(newRepo)
                             com.septuary.app.data.SyncRepository.checkReminders(context, newRepo)
-                            com.septuary.app.data.HealthConnectRepository.sync(context, newRepo)
-                            com.septuary.app.data.SyncRepository.pushToday(newRepo)
+                                            com.septuary.app.data.SyncRepository.pushToday(newRepo)
                         }
                     } catch (e: Exception) {
                         errorMessage = if (isSetup) "Something went wrong setting up. Try again." else "Wrong PIN. Try again."
@@ -87,66 +84,53 @@ fun App() {
     }
 }
 
-private enum class Tab(val label: String) { TODAY("Today"), EXERCISE("Exercise"), TRENDS("Trends"), LOG("Log"), GOALS("Goals"), SETTINGS("Settings") }
+private enum class Tab(val label: String) { MEDICINE("Medicine"), FOOD("Food"), EXERCISE("Exercise") }
 
 @Composable
 fun MainScaffold(repo: Repository, onLock: () -> Unit) {
-    var tab by remember { mutableStateOf(Tab.TODAY) }
+    var tab by remember { mutableStateOf(Tab.MEDICINE) }
 
     Column(Modifier.fillMaxSize().background(Bg)) {
-        Column(Modifier.padding(top = 18.dp, start = 16.dp, end = 16.dp, bottom = 10.dp)) {
-            Text("Project Septuary", color = TextMain, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-            Text("Private · on-device · status shared with family", color = TextMuted, fontSize = 12.sp)
+        Row(
+            Modifier.fillMaxWidth().padding(top = 18.dp, start = 16.dp, end = 16.dp, bottom = 10.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Text(
+                "Project Septuary", color = TextMain, fontSize = 18.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onLock) {
+                Icon(Icons.Filled.Lock, contentDescription = "Lock", tint = TextMuted)
+            }
         }
 
         Box(Modifier.weight(1f)) {
             when (tab) {
-                Tab.TODAY -> TodayScreen(repo)
+                Tab.MEDICINE -> DoseScreen(repo, medicine = true)
+                Tab.FOOD -> DoseScreen(repo, medicine = false)
                 Tab.EXERCISE -> ExerciseScreen(repo)
-                Tab.TRENDS -> TrendsScreen(repo)
-                Tab.LOG -> LogScreen(repo)
-                Tab.GOALS -> GoalsScreen(repo)
-                Tab.SETTINGS -> SettingsScreen(repo = repo, onLock = onLock)
             }
         }
 
         NavigationBar(containerColor = Panel, contentColor = TextMain) {
-            NavigationBarItem(
-                selected = tab == Tab.TODAY, onClick = { tab = Tab.TODAY },
-                icon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
-                label = { Text("Today") },
-                colors = navColors()
-            )
-            NavigationBarItem(
-                selected = tab == Tab.EXERCISE, onClick = { tab = Tab.EXERCISE },
-                icon = { Icon(Icons.Filled.FitnessCenter, contentDescription = null) },
-                label = { Text("Exercise") },
-                colors = navColors()
-            )
-            NavigationBarItem(
-                selected = tab == Tab.TRENDS, onClick = { tab = Tab.TRENDS },
-                icon = { Icon(Icons.Filled.TrendingUp, contentDescription = null) },
-                label = { Text("Trends") },
-                colors = navColors()
-            )
-            NavigationBarItem(
-                selected = tab == Tab.LOG, onClick = { tab = Tab.LOG },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                label = { Text("Log") },
-                colors = navColors()
-            )
-            NavigationBarItem(
-                selected = tab == Tab.GOALS, onClick = { tab = Tab.GOALS },
-                icon = { Icon(Icons.Filled.Flag, contentDescription = null) },
-                label = { Text("Goals") },
-                colors = navColors()
-            )
-            NavigationBarItem(
-                selected = tab == Tab.SETTINGS, onClick = { tab = Tab.SETTINGS },
-                icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                label = { Text("Settings") },
-                colors = navColors()
-            )
+            Tab.values().forEach { t ->
+                NavigationBarItem(
+                    selected = tab == t, onClick = { tab = t },
+                    icon = {
+                        Icon(
+                            when (t) {
+                                Tab.MEDICINE -> Icons.Filled.CheckCircle
+                                Tab.FOOD -> Icons.Filled.Restaurant
+                                Tab.EXERCISE -> Icons.Filled.FitnessCenter
+                            },
+                            contentDescription = null
+                        )
+                    },
+                    label = { Text(t.label) },
+                    colors = navColors()
+                )
+            }
         }
     }
 }
