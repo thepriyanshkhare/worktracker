@@ -1,3 +1,10 @@
 <resources>
-    <style name="Theme.Septuary" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Dark window from the first frame: no white flash on launch, and system bars match the app. -->
+    <style name="Theme.Septuary" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/septuary_bg</item>
+        <item name="android:colorBackground">@color/septuary_bg</item>
+        <item name="android:statusBarColor">@color/septuary_bg</item>
+        <item name="android:navigationBarColor">@color/septuary_panel</item>
+        <item name="android:colorAccent">@color/septuary_accent</item>
+    </style>
 </resources>

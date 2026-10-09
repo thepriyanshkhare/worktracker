@@ -13,6 +13,8 @@ val TextMain = Color(0xFFE8EAED)
 val TextMuted = Color(0xFF9AA2B1)
 val Accent = Color(0xFF4ADE80)
 val Danger = Color(0xFFF16565)
+val Warn = Color(0xFFF5B54A)
+val AccentSoft = Color(0xFF1C3A2A)
 
 private val SeptuaryColors = darkColorScheme(
     background = Bg,
@@ -21,7 +23,15 @@ private val SeptuaryColors = darkColorScheme(
     onPrimary = Color(0xFF0B1710),
     onBackground = TextMain,
     onSurface = TextMain,
-    error = Danger
+    error = Danger,
+    surfaceVariant = Panel2,
+    onSurfaceVariant = TextMuted,
+    secondaryContainer = Panel2,
+    onSecondaryContainer = TextMain,
+    surfaceContainer = Panel,
+    surfaceContainerHigh = Panel2,
+    surfaceContainerHighest = Panel2,
+    outline = Border
 )
 
 @Composable

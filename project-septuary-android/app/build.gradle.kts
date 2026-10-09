@@ -14,11 +14,33 @@ android {
         applicationId = "com.septuary.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // Monotonic across CI builds so every new APK installs as an update over the last one.
+        val run = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = 100 + run
+        versionName = "2.0.$run"
+    }
+
+    // Stable signing key, supplied by CI from repository secrets (never committed — this repo is
+    // public). A stable key is what lets each new build install over the previous one; without it
+    // Android rejects the update and the app has to be uninstalled (wiping local data).
+    val ksPath = System.getenv("SEPTUARY_KEYSTORE_PATH")
+    val ksPass = System.getenv("SEPTUARY_KEYSTORE_PASSWORD")
+    val hasStableKey = !ksPath.isNullOrBlank() && !ksPass.isNullOrBlank() && file(ksPath).exists()
+    signingConfigs {
+        if (hasStableKey) {
+            create("stable") {
+                storeFile = file(ksPath!!)
+                storePassword = ksPass
+                keyAlias = "septuary"
+                keyPassword = ksPass
+            }
+        }
     }
 
     buildTypes {
+        debug {
+            if (hasStableKey) signingConfig = signingConfigs.getByName("stable")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -67,24 +89,16 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Cloud sync: pushes today's status to Firestore for the parents' supervisor app to
-    // read — a tri-state summary per section (Medicine, Food, Exercise), plus an explicit,
-    // approved detail doc (medicine/food names, exercise detail, recent weight). Glucose and
-    // free-text notes are never synced — see SyncRepository.kt.
+    // read. Paths are keyed by a private family code generated on-device — see FamilyLink.kt.
     implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
     implementation("com.google.firebase:firebase-firestore-ktx")
     // Anonymous auth required by firestore.rules (Oct 2026 hardening) — blocks any
     // unauthenticated client from reading/writing, even if the project is discovered.
     implementation("com.google.firebase:firebase-auth-ktx")
 
-    // Health Connect: read-only Weight + Steps auto-sync. See HealthConnectRepository.kt.
-    // Pinned to this older point release deliberately: every newer release line (1.1.0 stable,
-    // 1.2.0-alpha) has bumped its required compileSdk past what this toolchain (AGP 8.5.2,
-    // compileSdk 34) supports (API 36, then API 37) — Health Connect's own compileSdk floor
-    // has been rising faster than this app's toolchain. 1.1.0-alpha07 (Jan 2024, pre-dating
-    // those bumps) only requires API 34 and exposes the exact same APIs this app uses
-    // (PermissionController, HealthPermission, WeightRecord, StepsRecord, ReadRecordsRequest/
-    // AggregateRequest, TimeRangeFilter).
-    implementation("androidx.health.connect:connect-client:1.1.0-alpha07")
+    // Fingerprint / face unlock (wraps the PIN-derived key in the hardware keystore).
+    implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

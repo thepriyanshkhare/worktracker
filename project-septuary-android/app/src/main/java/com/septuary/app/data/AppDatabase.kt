@@ -21,7 +21,7 @@ import net.sqlcipher.database.SupportFactory
         SleepEntity::class,
         StepsEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -103,6 +103,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds `timeEdited` to medications so shipped schedule updates never overwrite a time the
+         *  user changed on purpose. Existing rows default to 0 (not edited). */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE medications ADD COLUMN timeEdited INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         /**
          * Opens (or creates) the encrypted database using [passphrase] as the SQLCipher key.
          * A wrong passphrase throws when the DB is first touched — that's how PIN verification
@@ -113,7 +121,7 @@ abstract class AppDatabase : RoomDatabase() {
             val factory = SupportFactory(SQLiteDatabase.getBytes(passphrase))
             return Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "septuary_encrypted.db")
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
         }
     }

@@ -1,33 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Exact-time dose reminders -->
+    <!-- Exact-time reminders that survive reboot, time-zone changes and app updates. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- INTERNET was added deliberately (Sep 2026) for one narrow purpose: pushing today's
-         status to Firestore so the separate supervisor app (for parents) can show it — a
-         tri-state summary per section (Medicine, Food, Exercise), plus (as of Oct 2026, an
-         explicit choice) actual medicine/food names, exercise detail, and recent weight.
-         Glucose and free-text notes still never leave the device. That push is the ONLY
-         network traffic this app ever makes. See SyncRepository.kt. The encrypted health
-         database itself remains fully local; allowBackup stays false. -->
+    <!-- Lets the app ask (once, with a system dialog) to be exempt from battery optimisation so
+         OEM battery managers do not swallow reminders. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Fingerprint / face unlock. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Only used for the family status sync (see SyncRepository.kt). The health database
+         itself never leaves the device; allowBackup stays false. -->
     <uses-permission android:name="android.permission.INTERNET" />
-
-    <!-- Health Connect (Oct 2026): read-only access to Weight and Steps, auto-filling the
-         same weight_log/steps_log data a manual entry would — never written to, and sleep/
-         heart rate are deliberately not requested. See HealthConnectRepository.kt. -->
-    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
-    <uses-permission android:name="android.permission.health.READ_STEPS" />
-
-    <queries>
-        <package android:name="com.google.android.apps.healthdata" />
-    </queries>
 
     <application
         android:allowBackup="false"
+        android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.Septuary"
@@ -37,6 +28,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.Septuary">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -48,40 +40,25 @@
             android:name=".alarm.DoseAlarmReceiver"
             android:exported="false" />
 
+        <!-- "Taken" / "Snooze" buttons on a reminder notification. -->
+        <receiver
+            android:name=".alarm.DoseActionReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".alarm.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
 
-        <!-- Required by Health Connect: shows the user this app's data-use rationale when they
-             tap the privacy-policy link on Health Connect's own permission screen. This app
-             is side-loaded (not Play-distributed), so a trivial local explanation screen is
-             shown instead of a hosted privacy-policy URL. -->
-        <activity
-            android:name=".health.PermissionsRationaleActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
-            </intent-filter>
-        </activity>
-
-        <activity-alias
-            android:name="ViewPermissionUsageActivity"
-            android:exported="true"
-            android:targetActivity=".health.PermissionsRationaleActivity"
-            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
-                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
-            </intent-filter>
-        </activity-alias>
-
-        <!-- Lets the stock Camera app write an optional food-entry photo into this app's
-             private dose_photos/ folder via a content:// URI. No CAMERA permission is
-             requested here — TakePicture() delegates capture to the Camera app itself. -->
+        <!-- Lets the stock Camera app write an optional food photo into this app's private
+             dose_photos/ folder via a content:// URI. No CAMERA permission is requested. -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.septuary.app.fileprovider"

@@ -13,11 +13,30 @@ android {
         applicationId = "com.septuary.supervisor"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        val run = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = 100 + run
+        versionName = "2.0.$run"
+    }
+
+    // Same stable signing key as the main app, supplied by CI from repository secrets.
+    val ksPath = System.getenv("SEPTUARY_KEYSTORE_PATH")
+    val ksPass = System.getenv("SEPTUARY_KEYSTORE_PASSWORD")
+    val hasStableKey = !ksPath.isNullOrBlank() && !ksPass.isNullOrBlank() && file(ksPath).exists()
+    signingConfigs {
+        if (hasStableKey) {
+            create("stable") {
+                storeFile = file(ksPath!!)
+                storePassword = ksPass
+                keyAlias = "septuary"
+                keyPassword = ksPass
+            }
+        }
     }
 
     buildTypes {
+        debug {
+            if (hasStableKey) signingConfig = signingConfigs.getByName("stable")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

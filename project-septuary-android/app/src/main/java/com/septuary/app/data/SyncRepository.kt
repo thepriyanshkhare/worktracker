@@ -13,12 +13,13 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.septuary.app.MainActivity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
  * Pushes today's status to Firestore so the separate "Project Septuary Supervisor" app
  * (installed on his parents' phones) can show how the day is going. Two documents:
- * [STATUS_DOC_PATH] (an at-a-glance tri-state per section) and [DETAIL_DOC_PATH] (actual
+ * "status" (an at-a-glance tri-state per section) and "detail" (actual
  * medicine/food names, exercise detail, and recent weight — an explicit, approved choice
  * to share real detail with his parents rather than only Done/Pending/Not Done). Glucose
  * and free-text notes are still never pushed.
@@ -30,42 +31,17 @@ import kotlinx.coroutines.withContext
  */
 object SyncRepository {
 
-    // Oct 2026 security hardening: the collection name is an unguessable random token, not
-    // the plain word "septuary" — must match firestore.rules exactly, and must also match
-    // Supervisor MainActivity.kt's listener paths and scripts/push_to_septuary.py's inbox
-    // collection. If this token is ever leaked, rotate it in all four places plus the rules.
-    private const val ROOT_COLLECTION = "septuary_86800832c1af658f9d30a04276952c81"
+    // Paths are derived from the private family code generated on this phone (see FamilyLink).
+    // No path, token or key is compiled into the app or stored in the public repository.
+    private fun root(context: Context) = FamilyLink.root(context)
+    private fun statusPath(context: Context) = root(context) + "/status"
+    private fun detailPath(context: Context) = root(context) + "/detail"
+    private fun inbox(context: Context) = root(context) + "_inbox"
+    private fun reminders(context: Context) = root(context) + "_reminders"
 
-    /** One shared document — this app has a single patient, so no per-user path needed. */
-    private const val STATUS_DOC_PATH = "$ROOT_COLLECTION/status"
-
-    /**
-     * A second, richer document — deliberately separate from [STATUS_DOC_PATH] so the
-     * frequently-written tri-state doc stays small. This one carries actual medicine names,
-     * food items, exercise detail and weight numbers to the parents' app. This is an explicit,
-     * approved loosening of the original "status only, never names/values" privacy posture —
-     * do not extend it further (e.g. glucose) without the same kind of explicit confirmation.
-     */
-    private const val DETAIL_DOC_PATH = "$ROOT_COLLECTION/detail"
-
-    /**
-     * Entries queued by the Claude chat session (e.g. "I weighed 94.5kg today") land here.
-     * This app drains the collection on every unlock: each entry gets inserted into the
-     * *local encrypted* DB via the same Repository methods the in-app forms use, then the
-     * Firestore doc is deleted — so entries are never held in the cloud any longer than it
-     * takes this app to next come online. If Firestore is unreachable, nothing here throws
-     * or blocks the unlock; entries simply wait for the next successful drain.
-     */
-    private const val INBOX_COLLECTION = "${ROOT_COLLECTION}_inbox"
-
-    /**
-     * "Remind me" requests from the parents' Supervisor app land here (its first-ever write).
-     * Drained on every unlock: each pending doc triggers one local notification (reusing the
-     * "septuary_doses" channel from DoseAlarmReceiver's style), then gets deleted so it's
-     * shown exactly once. Deliberately in-app only — no Cloud Function/FCM/true push, by
-     * explicit choice once the Blaze-plan billing requirement was surfaced.
-     */
-    private const val REMINDERS_COLLECTION = "${ROOT_COLLECTION}_reminders"
+    // The pre-pairing location, which appeared in the public repository. Its two documents are
+    // deleted once (best-effort) so nothing stays readable there.
+    private const val LEGACY_ROOT = "septuary_86800832c1af658f9d30a04276952c81"
 
     /**
      * firestore.rules now requires request.auth != null on every path this app touches.
@@ -73,7 +49,7 @@ object SyncRepository {
      * real Firebase Auth SDK call rather than a bare, unauthenticated REST request, which
      * blocks casual discovery and scanning. Safe to call repeatedly; a no-op once signed in.
      */
-    private suspend fun ensureAuth(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun ensureAuth(): Boolean = withContext(Dispatchers.IO) {
         try {
             if (FirebaseAuth.getInstance().currentUser == null) {
                 Tasks.await(FirebaseAuth.getInstance().signInAnonymously())
@@ -105,7 +81,7 @@ object SyncRepository {
         try {
             if (!ensureAuth()) return@withContext
             val doses = repo.todayDoses()
-            val done = repo.todayLog()
+            val done = repo.todayLog().keys
 
             val medicineDoses = doses.filter { it.category == "medication" }
             val foodDoses = doses.filter { it.category != "medication" } // coffee/tea/meal
@@ -122,8 +98,9 @@ object SyncRepository {
                 "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )
 
+            // Not awaited: Firestore queues the write offline and sends it when back online.
             FirebaseFirestore.getInstance()
-                .document(STATUS_DOC_PATH)
+                .document(statusPath(repo.appContext))
                 .set(payload, SetOptions.merge())
         } catch (_: Exception) {
             // Best-effort only — never surface a sync failure to the patient-facing UI.
@@ -142,7 +119,7 @@ object SyncRepository {
             if (!ensureAuth()) return@withContext
             val today = repo.todayKey()
             val doses = repo.todayDoses()
-            val done = repo.todayLog()
+            val done = repo.todayLog().keys
 
             // Medicine: the full routine, not just today's slice — Oct 2026, requested so
             // parents always see the whole regimen, not only what happens to be due today.
@@ -171,11 +148,28 @@ object SyncRepository {
                 "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )
 
+            // Not awaited: Firestore queues the write offline and sends it when back online.
             FirebaseFirestore.getInstance()
-                .document(DETAIL_DOC_PATH)
+                .document(detailPath(repo.appContext))
                 .set(payload, SetOptions.merge())
         } catch (_: Exception) {
             // Best-effort only, same as pushTodayStatus.
+        }
+    }
+
+    private val pushScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+    private var pendingPush: kotlinx.coroutines.Job? = null
+
+    /**
+     * Fire-and-forget, debounced push used after every tick/log: the UI never waits on the
+     * network, and a burst of taps (e.g. "Mark all") becomes a single write.
+     */
+    @Synchronized
+    fun schedulePush(repo: Repository) {
+        pendingPush?.cancel()
+        pendingPush = pushScope.launch {
+            kotlinx.coroutines.delay(600)
+            pushToday(repo)
         }
     }
 
@@ -195,7 +189,7 @@ object SyncRepository {
         try {
             if (!ensureAuth()) return@withContext
             val snapshot = Tasks.await(
-                FirebaseFirestore.getInstance().collection(INBOX_COLLECTION).get()
+                FirebaseFirestore.getInstance().collection(inbox(repo.appContext)).get()
             )
             var importedAny = false
             for (doc in snapshot.documents) {
@@ -250,7 +244,7 @@ object SyncRepository {
         try {
             if (!ensureAuth()) return@withContext
             val snapshot = Tasks.await(
-                FirebaseFirestore.getInstance().collection(REMINDERS_COLLECTION).get()
+                FirebaseFirestore.getInstance().collection(reminders(context)).get()
             )
             for (doc in snapshot.documents) {
                 try {
@@ -265,14 +259,28 @@ object SyncRepository {
         }
     }
 
+    /** One-time, best-effort removal of the two documents at the old public path. */
+    suspend fun cleanupLegacy(context: Context) = withContext(Dispatchers.IO) {
+        val prefs = context.getSharedPreferences("septuary_app", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("legacy_cleaned", false)) return@withContext
+        try {
+            if (!ensureAuth()) return@withContext
+            val fs = FirebaseFirestore.getInstance()
+            Tasks.await(fs.document("$LEGACY_ROOT/status").delete())
+            Tasks.await(fs.document("$LEGACY_ROOT/detail").delete())
+            prefs.edit().putBoolean("legacy_cleaned", true).apply()
+        } catch (_: Exception) {
+            // Rules may already deny the old path — which is the goal anyway.
+            prefs.edit().putBoolean("legacy_cleaned", true).apply()
+        }
+    }
+
     /** Same channel/style as DoseAlarmReceiver's dose notifications, built here rather than by
      *  modifying that receiver — this isn't a dose, just reusing the established look/feel. */
     private fun postReminderNotification(context: Context) {
-        val channelId = "septuary_doses"
+        val channelId = com.septuary.app.alarm.Notifications.CHANNEL_FAMILY
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            nm.createNotificationChannel(NotificationChannel(channelId, "Medication reminders", NotificationManager.IMPORTANCE_HIGH))
-        }
+        com.septuary.app.alarm.Notifications.ensureChannels(context)
         val openIntent = Intent(context, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             context, "parent_reminder".hashCode(), openIntent,
@@ -282,6 +290,7 @@ object SyncRepository {
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("Reminder from home")
             .setContentText("Your parents sent a reminder — open Septuary.")
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)

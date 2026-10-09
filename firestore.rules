@@ -2,50 +2,48 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Oct 2026 security hardening: the collection name itself is an unguessable random
-    // token (not just "septuary") AND every rule below requires request.auth != null.
-    // Both apps sign in with Firebase Anonymous Auth before touching Firestore (see
-    // SyncRepository.kt / Supervisor MainActivity.kt), so this blocks casual discovery,
-    // automated scanning, and any raw/unauthenticated REST call against the project —
-    // the realistic threat for a personal app. It does NOT defend against a determined
-    // attacker who decompiles the APK and replicates the anonymous sign-in call; closing
-    // that gap needs a server-side secret never embedded in either app, which this
-    // project deliberately did not take on. Change the token below if it's ever leaked.
+    // Every path is keyed by a private 20-character family code (100 bits of randomness)
+    // generated on Priyansh's phone and shared only with his parents. The code is never in
+    // this repository or in either app, so the data cannot be located without it. Both apps
+    // also sign in with Firebase Anonymous Auth, so unauthenticated requests are refused.
+    //
+    // Collections cannot be listed by client apps, so knowing this rules file reveals nothing.
 
-    // Written by the Septuary app after every dose toggle / exercise log.
-    // Read by the Supervisor app (parents).
-    match /septuary_86800832c1af658f9d30a04276952c81/status {
-      allow read, write: if request.auth != null;
+    function signedIn() {
+      return request.auth != null;
     }
 
-    // Full-detail doc: medicine names, food items, exercise detail, and recent weight
-    // values shown to the parents' app. An intentional, explicitly-approved loosening
-    // of the original "status only, no names/values" posture above — same auth-gated
-    // rule, scoped to exactly this one document.
-    match /septuary_86800832c1af658f9d30a04276952c81/detail {
-      allow read, write: if request.auth != null;
+    function familyRoot(root) {
+      return root.matches('sp_[A-Z2-7]{20}');
     }
 
-    // Entries queued by the Claude chat session, written with an admin service-account
-    // credential (bypasses these rules entirely — admin SDK requests are never subject
-    // to security rules) and drained/deleted by the Septuary app on unlock, which needs
-    // both read (to fetch pending entries) and write (to delete consumed ones).
-    match /septuary_86800832c1af658f9d30a04276952c81_inbox/{entryId} {
-      allow read, write: if request.auth != null;
+    // Status + detail docs: written by Septuary, read by the Supervisor app. Small, so cap size.
+    match /{root}/{docId} {
+      allow get: if signedIn() && familyRoot(root) && docId in ['status', 'detail'];
+      allow create, update: if signedIn() && familyRoot(root) && docId in ['status', 'detail']
+                            && request.resource.data.size() < 20;
+      allow delete: if false;
     }
 
-    // Reminder requests from the parents' Supervisor app (its first-ever write — everything
-    // else it does is read-only). Drained, shown as a local notification, and deleted by the
-    // Septuary app on unlock, so it fires exactly once — a one-shot, in-app nudge, never a
-    // true push (no Cloud Function/FCM involved, by deliberate choice — see push_to_septuary
-    // for the only other writer that bypasses these rules entirely).
-    match /septuary_86800832c1af658f9d30a04276952c81_reminders/{reminderId} {
-      allow read, write: if request.auth != null;
+    // Entries queued from the Claude chat (written with an admin key, which bypasses rules),
+    // drained and deleted by the Septuary app.
+    match /{inbox}/{entryId} {
+      allow read, delete: if signedIn() && inbox.matches('sp_[A-Z2-7]{20}_inbox');
+      allow create, update: if false;
     }
 
-    // Everything else stays locked down.
-    match /{document=**} {
-      allow read, write: if false;
+    // "Remind me" taps from the Supervisor app; drained and deleted by the Septuary app.
+    match /{reminders}/{reminderId} {
+      allow read, delete: if signedIn() && reminders.matches('sp_[A-Z2-7]{20}_reminders');
+      allow create: if signedIn() && reminders.matches('sp_[A-Z2-7]{20}_reminders')
+                    && request.resource.data.keys().hasOnly(['createdAt']);
+      allow update: if false;
+    }
+
+    // One-time clean-up of the pre-pairing location (it appeared in this public repo).
+    match /septuary_86800832c1af658f9d30a04276952c81/{docId} {
+      allow delete: if signedIn();
+      allow read, create, update: if false;
     }
   }
 }

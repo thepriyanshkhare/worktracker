@@ -25,7 +25,7 @@ object PinCrypto {
     fun setupPin(context: Context, pin: String): CharArray {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        prefs.edit().putString(KEY_SALT, android.util.Base64.encodeToString(salt, android.util.Base64.NO_WRAP)).apply()
+        prefs.edit().putString(KEY_SALT, android.util.Base64.encodeToString(salt, android.util.Base64.NO_WRAP)).commit()
         return derive(pin, salt)
     }
 
@@ -43,6 +43,33 @@ object PinCrypto {
         val keyBytes = factory.generateSecret(spec).encoded
         // SQLCipher passphrase API takes chars; hex-encode the derived key bytes.
         return keyBytes.joinToString("") { "%02x".format(it) }.toCharArray()
+    }
+
+    // --- Brute-force throttle: 5 free attempts, then 30 s lockout doubling each time (cap 1 h). ---
+    private const val KEY_FAILS = "fails"
+    private const val KEY_LOCK_UNTIL = "lock_until"
+
+    /** Millis remaining before another attempt is allowed; 0 when free to try. */
+    fun lockoutRemainingMs(context: Context): Long {
+        val until = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(KEY_LOCK_UNTIL, 0L)
+        return (until - System.currentTimeMillis()).coerceAtLeast(0L)
+    }
+
+    fun recordFailure(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val fails = prefs.getInt(KEY_FAILS, 0) + 1
+        val edit = prefs.edit().putInt(KEY_FAILS, fails)
+        if (fails >= 5) {
+            val exp = (fails - 5).coerceAtMost(7)
+            val waitMs = (30_000L shl exp).coerceAtMost(3_600_000L)
+            edit.putLong(KEY_LOCK_UNTIL, System.currentTimeMillis() + waitMs)
+        }
+        edit.apply()
+    }
+
+    fun recordSuccess(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .remove(KEY_FAILS).remove(KEY_LOCK_UNTIL).apply()
     }
 
     fun resetAll(context: Context) {

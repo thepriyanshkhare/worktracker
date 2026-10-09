@@ -16,7 +16,13 @@ interface MedicationDao {
     @Query("SELECT COUNT(*) FROM medications")
     suspend fun count(): Int
 
-    @Query("UPDATE medications SET time = :time WHERE id = :id")
+    @Query("SELECT * FROM medications")
+    suspend fun getAllIncludingInactive(): List<MedicationEntity>
+
+    @Query("UPDATE medications SET active = 0 WHERE id NOT IN (:keepIds)")
+    suspend fun deactivateAllExcept(keepIds: List<String>)
+
+    @Query("UPDATE medications SET time = :time, timeEdited = 1 WHERE id = :id")
     suspend fun updateTime(id: String, time: String)
 }
 
@@ -30,6 +36,14 @@ interface DoseLogDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun mark(entry: DoseLogEntity)
+
+    /** Adds a log entry only if none exists yet (keeps an attached photo intact). */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun markIfAbsent(entry: DoseLogEntity)
+
+    /** Moves a day's entry to a new doseKey when an item's time changes, so it stays "done". */
+    @Query("UPDATE OR IGNORE dose_log SET doseKey = :newKey WHERE doseKey = :oldKey AND date = :date")
+    suspend fun rekey(oldKey: String, newKey: String, date: String)
 
     @Query("DELETE FROM dose_log WHERE doseKey = :doseKey AND date = :date")
     suspend fun unmark(doseKey: String, date: String)
@@ -141,11 +155,11 @@ interface ExerciseDao {
     @Query("SELECT * FROM exercise_log ORDER BY date DESC, time DESC LIMIT 60")
     suspend fun recent(): List<ExerciseLogEntity>
 
-    @Query("SELECT * FROM exercise_log WHERE date >= :from")
+    @Query("SELECT * FROM exercise_log WHERE date >= :from ORDER BY date DESC, time DESC")
     suspend fun since(from: String): List<ExerciseLogEntity>
 
     @Insert
-    suspend fun insert(entry: ExerciseLogEntity)
+    suspend fun insert(entry: ExerciseLogEntity): Long
 
     @Query("DELETE FROM exercise_log WHERE id = :id")
     suspend fun delete(id: Long)

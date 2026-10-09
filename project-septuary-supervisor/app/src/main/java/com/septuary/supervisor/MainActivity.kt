@@ -27,14 +27,22 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Oct 2026 security hardening: must match the Septuary app's SyncRepository.ROOT_COLLECTION,
-// firestore.rules, and scripts/push_to_septuary.py exactly. If this token is ever leaked,
-// rotate it in all four places plus the rules.
-private const val ROOT_COLLECTION = "septuary_86800832c1af658f9d30a04276952c81"
+// The family code is entered once by the parents (shared from Priyansh's app) and kept only on
+// this phone. Nothing secret is compiled into this app or stored in the public repository.
+private const val PREFS = "supervisor"
+private const val KEY_CODE = "family_code"
+private const val ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+private const val CODE_LENGTH = 20
+
+private fun normalizeCode(raw: String) = raw.uppercase().filter { it in ALPHABET }
 
 private val Bg = Color(0xFF0E1116)
 private val Panel = Color(0xFF171B22)
@@ -49,8 +57,23 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(background = Bg, surface = Panel)) {
-                Surface(color = Bg) {
-                    StatusScreen()
+                Surface(color = Bg, modifier = Modifier.fillMaxSize()) {
+                    val prefs = remember { getSharedPreferences(PREFS, MODE_PRIVATE) }
+                    var code by remember { mutableStateOf(prefs.getString(KEY_CODE, null)) }
+                    val current = code
+                    if (current == null) {
+                        PairingScreen { entered ->
+                            prefs.edit().putString(KEY_CODE, entered).apply()
+                            code = entered
+                        }
+                    } else {
+                        key(current) {
+                            StatusScreen(root = "sp_$current", onUnpair = {
+                                prefs.edit().remove(KEY_CODE).apply()
+                                code = null
+                            })
+                        }
+                    }
                 }
             }
         }
@@ -85,7 +108,7 @@ data class DetailItem(val name: String, val label: String, val done: Boolean, va
  * read (see firestore.rules) — this app signs in before attaching either listener.
  */
 @Composable
-fun StatusScreen() {
+fun StatusScreen(root: String, onUnpair: () -> Unit) {
     var date by remember { mutableStateOf<String?>(null) }
     var medicine by remember { mutableStateOf<String?>(null) }
     var food by remember { mutableStateOf<String?>(null) }
@@ -102,20 +125,28 @@ fun StatusScreen() {
     // requires request.auth != null). No credentials or UI — this is silent and automatic.
     var authReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        try {
-            if (FirebaseAuth.getInstance().currentUser == null) {
-                Tasks.await(FirebaseAuth.getInstance().signInAnonymously())
+        // Retry until signed in: Tasks.await must run off the main thread (calling it on the
+        // main thread throws, which previously showed a permanent "No connection").
+        while (!authReady) {
+            try {
+                withContext(Dispatchers.IO) {
+                    if (FirebaseAuth.getInstance().currentUser == null) {
+                        Tasks.await(FirebaseAuth.getInstance().signInAnonymously())
+                    }
+                }
+                authReady = true
+                connected = true
+            } catch (_: Exception) {
+                connected = false
+                kotlinx.coroutines.delay(5_000)
             }
-            authReady = true
-        } catch (_: Exception) {
-            connected = false // surfaces as the existing "No connection" banner below
         }
     }
 
     if (authReady) {
         DisposableEffect(Unit) {
             val reg: ListenerRegistration = FirebaseFirestore.getInstance()
-                .document("$ROOT_COLLECTION/status")
+                .document("$root/status")
                 .addSnapshotListener { snap, error ->
                     connected = error == null
                     if (snap != null && snap.exists()) {
@@ -131,7 +162,7 @@ fun StatusScreen() {
 
         DisposableEffect(Unit) {
             val reg: ListenerRegistration = FirebaseFirestore.getInstance()
-                .document("$ROOT_COLLECTION/detail")
+                .document("$root/detail")
                 .addSnapshotListener { snap, _ ->
                 if (snap == null || !snap.exists()) return@addSnapshotListener
                 @Suppress("UNCHECKED_CAST")
@@ -183,6 +214,7 @@ fun StatusScreen() {
     Column(
         Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(20.dp)
     ) {
         Text("Priyansh — Today", color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
@@ -219,14 +251,60 @@ fun StatusScreen() {
         WeightSection(recentWeights)
 
         Spacer(Modifier.height(20.dp))
-        RemindMeButton(authReady)
+        RemindMeButton(authReady, root)
 
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(20.dp))
 
         val lastUpdatedText = updatedAtMillis?.let {
             "Last updated " + SimpleDateFormat("h:mm a, MMM d", Locale.US).format(Date(it))
         } ?: "Not synced yet"
         Text(lastUpdatedText, color = TextMuted, fontSize = 12.sp)
+        Spacer(Modifier.height(8.dp))
+        TextButton(onClick = onUnpair, contentPadding = PaddingValues(0.dp)) {
+            Text("Change family code", color = TextMuted, fontSize = 12.sp)
+        }
+    }
+}
+
+/** First launch: the parent pastes or types the family code shared from Priyansh's app. */
+@Composable
+fun PairingScreen(onPaired: (String) -> Unit) {
+    var input by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("Connect to Priyansh", color = TextMain, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Enter the family code he shared with you. You only need to do this once.",
+            color = TextMuted, fontSize = 14.sp
+        )
+        Spacer(Modifier.height(20.dp))
+        OutlinedTextField(
+            value = input,
+            onValueChange = { input = it; error = "" },
+            placeholder = { Text("XXXX-XXXX-XXXX-XXXX-XXXX") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (error.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Text(error, color = Red, fontSize = 13.sp)
+        }
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = {
+                val code = normalizeCode(input.substringAfter(":"))
+                if (code.length == CODE_LENGTH) onPaired(code) else error = "Please check the code — it has 20 letters and numbers."
+            },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Green)
+        ) { Text("Connect", fontSize = 16.sp) }
     }
 }
 
@@ -389,7 +467,7 @@ private fun WeightSparkline(values: List<Double>) {
  * push would require enabling Firebase's paid Blaze plan.
  */
 @Composable
-fun RemindMeButton(authReady: Boolean) {
+fun RemindMeButton(authReady: Boolean, root: String) {
     val scope = rememberCoroutineScope()
     var sending by remember { mutableStateOf(false) }
     var sentJustNow by remember { mutableStateOf(false) }
@@ -407,11 +485,13 @@ fun RemindMeButton(authReady: Boolean) {
             scope.launch {
                 sending = true
                 try {
-                    Tasks.await(
-                        FirebaseFirestore.getInstance()
-                            .collection("${ROOT_COLLECTION}_reminders")
-                            .add(mapOf("createdAt" to FieldValue.serverTimestamp()))
-                    )
+                    withContext(Dispatchers.IO) {
+                        Tasks.await(
+                            FirebaseFirestore.getInstance()
+                                .collection("${root}_reminders")
+                                .add(mapOf("createdAt" to FieldValue.serverTimestamp()))
+                        )
+                    }
                     sentJustNow = true
                 } catch (_: Exception) {
                     // Best-effort, same posture as everything else here — no error UI for a personal app.

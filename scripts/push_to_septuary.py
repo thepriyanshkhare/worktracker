@@ -43,11 +43,14 @@ except ImportError:
 import requests
 
 SCOPES = ["https://www.googleapis.com/auth/datastore"]
-# Oct 2026 security hardening: must match SyncRepository.ROOT_COLLECTION in the Android app,
-# the Supervisor app's ROOT_COLLECTION, and firestore.rules exactly. Admin-credential calls
-# (this script) bypass security rules entirely, but the collection name still has to match
-# what the app actually drains on unlock.
-INBOX_COLLECTION = "septuary_86800832c1af658f9d30a04276952c81_inbox"
+# The inbox path is derived from the private family code shown in the app (menu -> Family
+# sharing). It is read from the environment so it never lands in this public repository.
+_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+_code = "".join(c for c in os.environ.get("SEPTUARY_FAMILY_CODE", "").upper() if c in _ALPHABET)
+if len(_code) != 20:
+    print("Set SEPTUARY_FAMILY_CODE to the 20-character family code from the app.", file=sys.stderr)
+    sys.exit(1)
+INBOX_COLLECTION = f"sp_{_code}_inbox"
 
 
 def get_access_token(key_path: str) -> tuple[str, str]:

@@ -17,7 +17,10 @@ data class MedicationEntity(
     // "medication" | "coffee" | "tea" | "meal" — same scheduling/alarm/dose-log machinery
     // powers all four; category only decides which Today section and which Trends bucket
     // (Medicine vs Food) an item counts toward.
-    val category: String = "medication"
+    val category: String = "medication",
+    // True once the user deliberately changes this item's time in-app; a later schedule update
+    // shipped with the app then keeps the user's time instead of overwriting it.
+    val timeEdited: Boolean = false
 )
 
 @Entity(tableName = "dose_log", primaryKeys = ["doseKey", "date"])

@@ -2,9 +2,13 @@ package com.septuary.app.data
 
 /**
  * Seed data extracted from "Project Septuary" (Claude Docs) on 29 Sep 2026.
- * Loaded once into the encrypted database on first unlock, only if empty.
+ * Applied on first unlock, and re-applied to existing installs whenever [VERSION] is bumped
+ * (user-edited times are preserved; items no longer listed here are deactivated, history kept).
  */
 object SeedData {
+
+    /** Bump whenever the medicine/food schedule below changes. */
+    const val VERSION = 2
 
     val medications = listOf(
         MedicationEntity("neurobion", "Neurobion Forte", "B-complex incl. B12 (replacing Tab Homin)",
@@ -33,7 +37,7 @@ object SeedData {
             "Night — rinse mouth after use", "21:30", "daily", null, null),
 
         // Wellness reminders — same alarm/dose-log machinery as medications, grouped separately
-        // on Today and counted toward the "Food" (not "Medicine") Trends bucket.
+        // on the Food tab and synced to the family app as Food.
         MedicationEntity(
             id = "coffee-1", name = "Black Coffee", detail = "1 of 3 — no sugar/cream",
             instruction = "Skip if you're already feeling wired or it's this late", time = "08:15",
