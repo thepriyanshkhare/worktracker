@@ -83,59 +83,41 @@ stock Android. Two remaining gaps, stated plainly:
    layer their own aggressive app-killers on top of stock Android, outside what any
    app's manifest permissions can control. If you're on one of these, also check that
    manufacturer's own "autostart" / "protected apps" / "battery saver exceptions" list
-   and add Project Septuary manually. The in-app Settings tab reminds you of this.
+   and add Project Septuary manually. The Medicine tab shows a banner until reminders are fully enabled.
 
 ## 5. Project layout
 
 ```
 app/src/main/java/com/septuary/app/
-  MainActivity.kt          — app entry, PIN gate, tab navigation
-  data/                    — Room entities, DAOs, encrypted AppDatabase, Repository, seed data
-  crypto/PinCrypto.kt      — PBKDF2 PIN -> SQLCipher passphrase derivation
-  alarm/                   — AlarmManager scheduling, boot-reschedule receiver, notification receiver
-  ui/screens/              — Today / Log / Goals / Settings Compose screens
-  ui/theme/                — dark theme matching the earlier PWA version
+  MainActivity.kt          — entry, unlock (PIN / fingerprint), auto-lock, three-tab navigation
+  Session.kt               — process-wide unlocked session (survives rotation)
+  data/                    — Room entities, DAOs, encrypted AppDatabase, Repository, seed data,
+                             FamilyLink (private pairing code), PendingActions/DoneMirror, sync
+  crypto/                  — PIN -> key (PBKDF2 + throttle), BiometricVault, LocalVault (Keystore)
+  alarm/                   — exact alarms, Taken/Snooze actions, boot/time-change re-arm, channels
+  ui/screens/              — Medicine + Food (DoseScreen), Exercise, Lock, Family sharing
+  ui/theme/                — dark theme
 ```
 
-## 6. Seed data
+## 6. Schedule (seed) data
 
-`data/SeedData.kt` mirrors your current Project Septuary doc as of 29 Sep 2026 —
-medications and schedule, weight/glucose history, goals, and open flags. It loads once,
-only if the database is empty, on first unlock.
+`data/SeedData.kt` holds the medicine and food schedule. It is written on first unlock and
+re-applied to an existing install whenever `SeedData.VERSION` is bumped — times you changed
+in-app are kept, removed items are deactivated, logged history is never touched.
 
-## 7. Cloud sync (added Sep 2026) — what changed and why
+## 7. Family sync
 
-This app is no longer fully offline. It now requests `INTERNET` for one narrow purpose:
-pushing a same-day **Medicine / Food / Exercise** status (Done, Pending, or Not Done —
-nothing more specific) to Firestore, so the separate **Project Septuary Supervisor**
-app (installed on your parents' phones, see `../project-septuary-supervisor/`) can show
-it. Everything else about the app's design is unchanged: the encrypted local database
-never syncs, `allowBackup` stays `false`, and medication names, doses, glucose/weight
-values and notes never leave the device through this channel.
+Only today's Medicine / Food / Exercise status and the item list go to Firestore, under a
+path derived from a **private 20-character family code** generated on the phone (menu →
+Family sharing). The code is not in this repository or in either APK; parents enter it once
+in the Supervisor app. Deploy `../firestore.rules` (Firebase Console → Firestore → Rules) and
+enable **Anonymous** sign-in (Authentication → Sign-in method).
 
-**A second channel goes the other way.** When you tell Claude in chat to log or update
-something ("update the app: I weighed 94.5kg"), Claude writes that entry to a separate
-Firestore inbox collection (`septuary_inbox`) using an admin service-account credential
-— see `../scripts/push_to_septuary.py`. This app drains that inbox into the local
-encrypted DB (via the same `Repository` methods the in-app forms use) every time you
-unlock it, then deletes each consumed entry from Firestore. See `SyncRepository.kt` for
-both directions.
+The chat-logging script needs the same code: `SEPTUARY_FAMILY_CODE=XXXX-... python3
+../scripts/push_to_septuary.py ...`. Never commit the service-account key.
 
-**To make this live** (it currently runs against a placeholder `google-services.json`
-that will fail every network call silently — nothing breaks, sync just never lands):
+## 8. Signing (required for updates to install)
 
-1. Create a free Firebase project at console.firebase.google.com (Spark/free tier is
-   enough — Firestore's free quota comfortably covers a handful of status pushes a day).
-2. In that project, register **two** Android apps:
-   - `com.septuary.app` (this app)
-   - `com.septuary.supervisor` (the parents' app)
-3. Download each app's real `google-services.json` and replace the placeholder at
-   `app/google-services.json` in each project folder.
-4. Enable **Firestore Database** (Native mode, any region) in the console.
-5. Deploy the security rules in `../firestore.rules` (Firebase Console → Firestore →
-   Rules → paste and publish). These scope access to exactly the `septuary/status` and
-   `septuary_inbox` paths — nothing else in the project is reachable.
-6. Generate a service-account key (Project Settings → Service Accounts → Generate new
-   private key) and give that JSON file to Claude — it's what lets the chat session
-   write to your inbox. **Never commit this file** — `.gitignore` at the repo root
-   already excludes anything named like a service-account key.
+CI signs both APKs with a stable key from two repository secrets:
+`SEPTUARY_KEYSTORE_B64` (base64 of the keystore) and `SEPTUARY_KEYSTORE_PASSWORD`. Without
+them each build gets a throwaway key and Android refuses to install it over the previous one.

@@ -66,11 +66,16 @@ object AlarmScheduler {
 
     private fun setAlarm(context: Context, triggerAt: Long, pi: PendingIntent) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        if (canScheduleExact(context)) {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
-        } else {
-            // Permission missing: still remind (a few minutes late at worst) rather than not at all.
-            // The app shows a banner until exact alarms are allowed.
+        try {
+            if (canScheduleExact(context)) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            } else {
+                // Permission missing: still remind (a few minutes late at worst) rather than not at all.
+                // The app shows a banner until exact alarms are allowed.
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            }
+        } catch (_: SecurityException) {
+            // Exact-alarm access was revoked between the check and the call.
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
         }
     }

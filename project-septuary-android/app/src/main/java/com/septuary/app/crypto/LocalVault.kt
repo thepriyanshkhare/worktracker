@@ -38,18 +38,21 @@ object LocalVault {
         return gen.generateKey()
     }
 
+    /** Never throws: a Keystore hiccup must not break unlocking or crash a receiver. */
     @Synchronized
-    fun put(context: Context, name: String, value: String?) {
+    fun put(context: Context, name: String, value: String?): Boolean = try {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (value == null) {
             prefs.edit().remove(name).commit()
-            return
+        } else {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, key())
+            val ct = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+            val packed = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(ct, Base64.NO_WRAP)
+            prefs.edit().putString(name, packed).commit()
         }
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key())
-        val ct = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
-        val packed = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(ct, Base64.NO_WRAP)
-        prefs.edit().putString(name, packed).commit()
+    } catch (_: Exception) {
+        false
     }
 
     @Synchronized
